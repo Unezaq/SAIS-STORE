@@ -1,0 +1,290 @@
+@import "tailwindcss";
+@import "lenis/dist/lenis.css";
+
+@theme {
+  /* Brand — deep green is now an accent, not the canvas */
+  --color-primary: #1B4332;
+  --color-primary-dark: #081C15;
+  --color-primary-light: #2D6A4F;
+  --color-primary-accent: #40916C;
+
+  --color-background: #FFF8F0;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #F6EFE6;
+  --color-ink: #10201A;
+  --color-text: #16231D;
+  --color-text-muted: #6B6259;
+  --color-border: #E8E1D7;
+  --color-hairline: #E4DCD1;
+  --color-accent: #C08457;
+  --color-whatsapp: #25D366;
+
+  --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /*
+   * Fibonacci spacing scale — 8 · 13 · 21 · 34 · 55 · 89 · 144.
+   * Every vertical rhythm on the storefront steps through this scale, so the
+   * layout follows a natural progression instead of arbitrary paddings.
+   */
+  --spacing-fib-1: 8px;
+  --spacing-fib-2: 13px;
+  --spacing-fib-3: 21px;
+  --spacing-fib-4: 34px;
+  --spacing-fib-5: 55px;
+  --spacing-fib-6: 89px;
+  --spacing-fib-7: 144px;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+
+  /*
+   * Type scale — tracking and leading are size-specific (Apple: "tracking is
+   * never one value for all sizes"). Large text gets negative tracking and
+   * tight leading; small UI text gets positive tracking.
+   */
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--line-height: 1.4;
+  --text-eyebrow--letter-spacing: 0.14em;
+  --text-eyebrow--font-weight: 600;
+
+  --text-display: clamp(2.375rem, 6.2vw, 4.25rem);
+  --text-display--line-height: 1.03;
+  --text-display--letter-spacing: -0.035em;
+  --text-display--font-weight: 600;
+
+  --text-title: clamp(1.625rem, 3.2vw, 2.5rem);
+  --text-title--line-height: 1.08;
+  --text-title--letter-spacing: -0.028em;
+  --text-title--font-weight: 600;
+
+  --text-heading: 1.0625rem;
+  --text-heading--line-height: 1.3;
+  --text-heading--letter-spacing: -0.015em;
+  --text-heading--font-weight: 600;
+
+  /* Motion — one shared easing for everything that isn't a spring */
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Base resets & typography */
+html,
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+/* Prices and any aligned figures shouldn't shift as values change */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Safe area padding utilities */
+.pb-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.pt-safe {
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+
+.bottom-bar-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/*
+ * Materials — translucent chrome that lets content scroll underneath.
+ * The bright top edge reads as light catching the surface.
+ */
+.material {
+  background-color: color-mix(in srgb, var(--color-background) 76%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+}
+
+.material-raised {
+  background-color: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(16, 32, 26, 0.04);
+}
+
+/* Press feedback lives on pointer-down, never on release */
+.press {
+  transition:
+    transform 160ms var(--ease-fluid),
+    background-color 160ms var(--ease-fluid),
+    color 160ms var(--ease-fluid),
+    border-color 160ms var(--ease-fluid),
+    opacity 160ms var(--ease-fluid);
+}
+
+.press:active {
+  transform: scale(0.97);
+  transition-duration: 90ms;
+}
+
+/* Full-bleed rail that still lines up with the 7xl container above it */
+.rail-pad {
+  padding-inline: max(1.25rem, calc((100vw - 80rem) / 2 + 1.25rem));
+}
+
+@media (min-width: 768px) {
+  .rail-pad {
+    padding-inline: max(2rem, calc((100vw - 80rem) / 2 + 2rem));
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background: #D8D0C5;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #BDB4A8;
+}
+
+/*
+ * Ken Burns — cinematic slow pan/zoom. Used by the hero slideshow and by the
+ * product-card "living photo" effect. Three variants so consecutive slides or
+ * neighbouring cards never drift in the same direction.
+ */
+@keyframes kenburns-in {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.16) translate3d(-1.5%, -2.5%, 0);
+  }
+}
+
+@keyframes kenburns-out {
+  from {
+    transform: scale(1.16) translate3d(1.5%, 2%, 0);
+  }
+  to {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+}
+
+@keyframes kenburns-drift {
+  from {
+    transform: scale(1.08) translate3d(-2%, 1.5%, 0);
+  }
+  to {
+    transform: scale(1.18) translate3d(1.5%, -1.5%, 0);
+  }
+}
+
+.animate-kenburns-in {
+  animation: kenburns-in 7.5s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+.animate-kenburns-out {
+  animation: kenburns-out 7.5s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+.animate-kenburns-drift {
+  animation: kenburns-drift 7.5s cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+/* Card-sized variant: subtler movement, loops gently back and forth. */
+@keyframes kenburns-card {
+  from {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.09) translate3d(-1.5%, -1.5%, 0);
+  }
+  to {
+    transform: scale(1.02) translate3d(0, 0, 0);
+  }
+}
+
+.animate-kenburns-card {
+  animation: kenburns-card 12s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Pause the card motion when the user points at the card or prefers stillness. */
+.group:hover .animate-kenburns-card {
+  animation-play-state: paused;
+}
+
+/*
+ * Reduced motion: keep the feedback, drop the vestibular part.
+ * Lenis already honours the preference itself (lerp forced to 1).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .press,
+  .press:active {
+    transform: none;
+    transition-duration: 1ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .material,
+  .material-raised {
+    background-color: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
