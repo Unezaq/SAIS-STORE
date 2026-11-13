@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
@@ -15,15 +16,25 @@ export default function ClientRegisterPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setPending(true)
-    const formData = new FormData(e.currentTarget)
-    const result = await registerClientAction(formData)
-    if (result?.ok) {
-      success('Compte créé', 'Bienvenue chez SAIS ! Vous êtes connecté.')
-      router.push('/account')
-      return
+    try {
+      const formData = new FormData(e.currentTarget)
+      const result = await registerClientAction(formData)
+      if (result?.ok) {
+        if (result.requiresEmailConfirmation) {
+          success('Compte créé', 'Consultez votre email pour confirmer votre adresse.')
+          router.push('/login')
+        } else {
+          success('Compte créé', 'Bienvenue chez SAIS ! Vous êtes connecté.')
+          router.push('/account')
+        }
+        return
+      }
+      showError('Échec de linscription', result?.error ?? 'Une erreur est survenue.')
+    } catch {
+      showError('Échec de linscription', 'Vérifiez votre connexion et réessayez.')
+    } finally {
+      setPending(false)
     }
-    showError('Échec de linscription', result?.error ?? 'Une erreur est survenue.')
-    setPending(false)
   }
 
   return (
@@ -40,16 +51,16 @@ export default function ClientRegisterPage() {
           <Input label="Email" name="email" type="email" required />
           <Input label="Téléphone" name="phone" placeholder="06 12 34 56 78" required />
           <Input label="Adresse de livraison" name="address" placeholder="Rue, ville, code postal" />
-          <Input label="Mot de passe" name="password" type="password" minLength={6} required />
+          <Input label="Mot de passe" name="password" type="password" minLength={8} required />
           <Button type="submit" size="lg" className="w-full" isLoading={pending} disabled={pending}>
             {pending ? 'Création…' : 'Créer le compte'}
           </Button>
         </form>
         <p className="mt-fib-3 text-center text-sm text-text-muted">
           Déjà un compte ?{' '}
-          <a href="/login" className="text-ink font-medium hover:underline">
+          <Link href="/login" className="text-ink font-medium hover:underline">
             Se connecter
-          </a>
+          </Link>
         </p>
       </div>
     </div>

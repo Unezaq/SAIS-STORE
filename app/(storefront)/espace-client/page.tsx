@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 import { JsonLd, faqJsonLd, breadcrumbJsonLd } from '@/lib/seo'
-import { clientEnv } from '@/lib/env'
+import { getSettings } from '@/lib/products'
 
 export const metadata: Metadata = {
   title: 'Espace client — Commander, suivre et nous contacter',
@@ -20,11 +20,6 @@ export const metadata: Metadata = {
     'Comment commander chez SAIS Store en 4 étapes simples : choisissez, envoyez sur WhatsApp, confirmez votre adresse, recevez en 24–48h avec paiement à la livraison. Contact et suivi inclus.',
   alternates: { canonical: '/espace-client' },
 }
-
-const WHATSAPP_LINK = `https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}`
-const WHATSAPP_ORDER_LINK = `https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}?text=${encodeURIComponent(
-  'Salam SAIS Store 👋 Bghit ncommandi une pièce. Had la référence li 3jbani :'
-)}`
 
 const steps = [
   {
@@ -37,7 +32,7 @@ const steps = [
     icon: MessageCircle,
     title: 'Envoyez la commande sur WhatsApp',
     body: 'Un message suffit : la référence de la pièce, la taille et la quantité. Aucun compte à créer.',
-    action: { label: 'Écrire sur WhatsApp', href: WHATSAPP_ORDER_LINK, external: true },
+    action: { label: 'Écrire sur WhatsApp', href: undefined, external: true },
   },
   {
     icon: ClipboardCheck,
@@ -84,7 +79,13 @@ const faqs = [
   },
 ]
 
-export default function EspaceClientPage() {
+export default async function EspaceClientPage() {
+  const settings = await getSettings()
+  const whatsappLink = `https://wa.me/${settings.whatsappPhone}`
+  const whatsappOrderLink = `${whatsappLink}?text=${encodeURIComponent(
+    'Salam SAIS Store 👋 Bghit ncommandi une pièce. Had la référence li 3jbani :'
+  )}`
+
   return (
     <div className="flex flex-col">
       <JsonLd
@@ -135,7 +136,7 @@ export default function EspaceClientPage() {
                     </p>
                     {step.action && (
                       <Link
-                        href={step.action.href}
+                        href={step.action.href ?? whatsappOrderLink}
                         target={step.action.external ? '_blank' : undefined}
                         rel={step.action.external ? 'noreferrer' : undefined}
                         className="press mt-fib-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-ink px-fib-2 py-fib-1 text-[13px] font-medium text-white transition-colors hover:bg-ink/90"
@@ -167,7 +168,7 @@ export default function EspaceClientPage() {
               </p>
               <div className="mt-fib-3 flex flex-wrap gap-fib-2">
                 <a
-                  href={WHATSAPP_LINK}
+                  href={whatsappLink}
                   target="_blank"
                   rel="noreferrer"
                   className="press inline-flex items-center gap-2 rounded-full bg-white px-fib-3 py-fib-1 text-sm font-medium text-primary hover:bg-white/90"
@@ -193,7 +194,7 @@ export default function EspaceClientPage() {
                 <div>
                   <p className="text-[13px] font-semibold text-ink">Téléphone</p>
                   <p className="mt-0.5 tabular text-sm text-text-muted" dir="ltr">
-                    +{clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE.replace(
+                    +{settings.whatsappPhone.replace(
                       /^(\d{3})(\d{3})(\d{3})(\d{3})$/,
                       '$1 $2 $3 $4'
                     )}
@@ -218,7 +219,9 @@ export default function EspaceClientPage() {
                 <div>
                   <p className="text-[13px] font-semibold text-ink">Livraison</p>
                   <p className="mt-0.5 text-sm text-text-muted">
-                    Tout le Maroc · 24–48h · paiement à la réception
+                    Tout le Maroc · {settings.deliveryFee} MAD
+                    {settings.freeDeliveryMinItems > 0 && ` · offerte dès ${settings.freeDeliveryMinItems} pièces`}
+                    {' '}· 24–48h · paiement à la réception
                   </p>
                 </div>
               </div>
@@ -304,7 +307,7 @@ export default function EspaceClientPage() {
               reste, jusqu&apos;à votre porte.
             </p>
             <a
-              href={WHATSAPP_ORDER_LINK}
+              href={whatsappOrderLink}
               target="_blank"
               rel="noreferrer"
               className="press mt-fib-3 inline-flex items-center gap-2 rounded-full bg-white px-fib-3 py-fib-1 text-sm font-medium text-primary hover:bg-white/90"

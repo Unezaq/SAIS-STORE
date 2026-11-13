@@ -15,15 +15,20 @@ export default function AdminLoginPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setPending(true)
-    const formData = new FormData(e.currentTarget)
-    const result = await loginAction(formData)
-    if (result && result.ok) {
-      success('Connexion réussie', 'Bienvenue dans ladmin SAIS.')
-      router.push('/admin')
-      return
+    try {
+      const formData = new FormData(e.currentTarget)
+      const result = await loginAction(formData)
+      if (result?.ok) {
+        success('Connexion réussie', 'Bienvenue dans ladmin SAIS.')
+        router.push('/admin')
+        return
+      }
+      showError("Échec de la connexion", result?.error ?? 'Mot de passe incorrect.')
+    } catch {
+      showError("Échec de la connexion", 'Vérifiez votre connexion et réessayez.')
+    } finally {
+      setPending(false)
     }
-    showError("Échec de la connexion", result?.error ?? 'Mot de passe incorrect.')
-    setPending(false)
   }
 
   return (
@@ -32,24 +37,28 @@ export default function AdminLoginPage() {
         <p className="text-eyebrow uppercase text-text-muted">SAIS Store</p>
         <h1 className="mt-fib-1 text-title text-ink">Connexion admin</h1>
         <p className="mt-fib-1 text-sm text-text-muted">
-          Entrez le mot de passe administrateur.
+          Connectez-vous avec votre compte administrateur.
         </p>
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
+          <Input
+            label="Email"
+            name="email"
+            type="email"
+            placeholder="admin@votre-domaine.ma"
+            required
+            autoFocus
+          />
           <Input
             label="Mot de passe"
             name="password"
             type="password"
             placeholder="••••••••"
             required
-            autoFocus
           />
           <Button type="submit" size="lg" className="w-full" isLoading={pending} disabled={pending}>
             {pending ? 'Connexion…' : 'Se connecter'}
           </Button>
         </form>
-        <p className="mt-fib-3 text-xs text-text-muted">
-          Mot de passe par défaut : <code>sais2026</code> (variable ADMIN_PASSWORD).
-        </p>
       </div>
     </div>
   )

@@ -12,31 +12,29 @@ export {
   upsertProduct,
   deleteProduct,
   getOrders,
-  getOrdersByClientEmail,
+  getOrdersByAuthUserId,
   updateOrderStatus,
-  getAllClients as getClients,
+  getClients,
+  getClientByAuthUserId,
+  ensureClientProfile,
   createOrder,
   getSettings,
   updateSettings,
-  // Client accounts
-  createClientAccount,
-  getClientByEmail,
-  verifyClientCredentials,
-  // Admin accounts
-  verifyAdminCredentials,
-  setAdminPassword,
 } from './store'
 
-// Password helpers live in lib/utils/crypto.ts
-export { hashPassword, verifyPassword } from '@/lib/utils/crypto'
-
+import {
+  getProduct,
+  getProducts,
+  getProductsByCategory,
+  getPromoProducts,
+  getSettings,
+} from './store'
+import { applyStorePrice } from './pricing'
 import type { Product } from './data'
 import type {
   StoreOrder,
   StoreClient,
   StoreSettings,
-  StoreClientAccount,
-  AdminAccount,
 } from './types/store'
 
 export type {
@@ -44,8 +42,36 @@ export type {
   StoreOrder,
   StoreClient,
   StoreSettings,
-  StoreClientAccount,
-  AdminAccount,
 }
 
 export { discountPercent } from './data'
+
+export async function getStorefrontProducts(): Promise<Product[]> {
+  const [products, settings] = await Promise.all([getProducts(), getSettings()])
+  return products.map((product) => applyStorePrice(product, settings))
+}
+
+export async function getStorefrontProduct(slug: string): Promise<Product | undefined> {
+  const [product, settings] = await Promise.all([getProduct(slug), getSettings()])
+  return product ? applyStorePrice(product, settings) : undefined
+}
+
+export async function getStorefrontProductsByCategory(slug: string): Promise<Product[]> {
+  const [products, settings] = await Promise.all([
+    slug === 'all' || slug === 'nouveautes'
+      ? getProducts()
+      : getProductsByCategory(slug),
+    getSettings(),
+  ])
+  const visible = slug === 'nouveautes'
+    ? products.filter((product) => product.badge === 'Nouveau')
+    : products
+  return visible.map((product) => applyStorePrice(product, settings))
+}
+
+export async function getStorefrontPromoProducts(): Promise<Product[]> {
+  const [products, settings] = await Promise.all([getProducts(), getSettings()])
+  return products
+    .map((product) => applyStorePrice(product, settings))
+    .filter((product) => Boolean(product.originalPrice && product.originalPrice > product.price))
+}

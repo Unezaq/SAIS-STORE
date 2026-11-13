@@ -34,7 +34,6 @@ export default function CollectionsPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 z-10 p-fib-2 text-start">
                 <h2 className="text-[15px] font-medium text-white">{c.name}</h2>
-                <p className="tabular mt-fib-1 text-xs text-white/70">{c.count}</p>
               </div>
             </Link>
           ))}

@@ -280,7 +280,7 @@ erDiagram
 
 1. **WhatsApp Fulfillment Phone:** What is the official Moroccan phone number (+212) that should receive COD orders? (A placeholder like `212600000000` is currently configured in settings).
 2. **Bilingual Copy Strategy:** Should Arabic and French be toggled via a language switcher (`/ar` and `/fr`), or should the UI display a hybrid Moroccan e-commerce layout (French headings, Arabic callouts / WhatsApp messages)?
-3. **Supabase Environment:** Do you have an existing Supabase cloud project ready with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, or should we prepare local migration scripts first?
+3. **Supabase Environment:** Do you have an existing Supabase cloud project ready with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, or should we prepare local migration scripts first?
 4. **Moroccan Shipping Matrix:** Should shipping fees be flat-rate across Morocco (e.g., 35 MAD, free over 500 MAD), or tiered by city (Casablanca / Rabat cheaper, rest of kingdom standard)?
 5. **Initial Catalog Categories:** What initial clothing categories would you like seeded? (e.g., Robes / فساتين, Abayas / عبايات, Ensembles / أطقم, Chemises & Blouses).
 

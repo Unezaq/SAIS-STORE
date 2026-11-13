@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { ArrowUpRight, MessageCircle } from 'lucide-react'
-import { clientEnv } from '@/lib/env'
 
 const families = [
   { label: 'Peignoirs', href: '/collections/peignoirs' },
@@ -8,20 +7,28 @@ const families = [
   { label: 'Ensembles Hiver', href: '/collections/ensembles' },
 ]
 
-const help = [
-  { label: 'La boutique', href: '/boutique' },
-  { label: 'Promotions', href: '/promotions' },
-  { label: 'Nouveautés', href: '/collections/nouveautes' },
-  { label: 'Espace client', href: '/espace-client' },
-  { label: 'Suivre ma commande', href: '/account' },
-  { label: 'Nous écrire', href: `https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}` },
-]
-
 /**
  * Sticky footer: the page surface scrolls over it, so it reads as the ground
  * the site rests on rather than another block of content.
  */
-export function SiteFooter() {
+export function SiteFooter({
+  whatsappPhone,
+  deliveryFee,
+  freeDeliveryMinItems,
+}: {
+  whatsappPhone: string
+  deliveryFee: number
+  freeDeliveryMinItems: number
+}) {
+  const help = [
+    { label: 'La boutique', href: '/boutique' },
+    { label: 'Promotions', href: '/promotions' },
+    { label: 'Nouveautés', href: '/collections/nouveautes' },
+    { label: 'Espace client', href: '/espace-client' },
+    { label: 'Suivre ma commande', href: '/account' },
+    { label: 'Nous écrire', href: `https://wa.me/${whatsappPhone}` },
+  ]
+
   return (
     <footer className="sticky bottom-0 z-0 bg-primary-dark text-white">
       <div className="mx-auto w-full max-w-7xl px-5 pb-28 pt-14 md:px-8 md:pb-12 md:pt-20">
@@ -33,7 +40,7 @@ export function SiteFooter() {
               hiver ultra doux. Commande sur WhatsApp avec paiement à la livraison.
             </p>
             <a
-              href={`https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}`}
+              href={`https://wa.me/${whatsappPhone}`}
               target="_blank"
               rel="noreferrer"
               className="press mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-md hover:bg-white/15"
@@ -86,7 +93,10 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-col gap-2 border-t border-white/10 pt-6 text-[11px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
           <p>© 2026 SAIS Store — Casablanca, Maroc</p>
-          <p>Paiement à la livraison · Livraison 24–48h</p>
+          <p>
+            Paiement à la livraison · {deliveryFee > 0 ? `Livraison ${deliveryFee} MAD` : 'Livraison gratuite'}
+            {freeDeliveryMinItems > 0 && ` · offerte dès ${freeDeliveryMinItems} pièces`} · 24–48h
+          </p>
         </div>
       </div>
     </footer>

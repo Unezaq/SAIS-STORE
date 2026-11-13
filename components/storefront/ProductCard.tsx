@@ -190,7 +190,8 @@ export function ProductCard({
             'bg-white/80 text-ink backdrop-blur-md hover:bg-white',
             'md:translate-y-1 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100'
           )}
-          aria-label="Ajouter au panier"
+          aria-label={`Choisir les options de ${title}`}
+          title="Choisir la taille et la couleur"
         >
           <Plus size={17} />
         </button>

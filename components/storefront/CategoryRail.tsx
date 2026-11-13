@@ -8,11 +8,10 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { useReducedMotion } from 'motion/react'
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
-import { categories, PRODUCTS_SEED } from '@/lib/data'
 import type { Product } from '@/lib/data'
 
 export interface CategoryRailProps {
-  products?: Product[]
+  products: Product[]
 }
 import { formatMAD, cn } from '@/lib/utils'
 
@@ -26,7 +25,7 @@ gsap.registerPlugin(useGSAP, ScrollTrigger)
  * native and nothing fights Lenis. The track is translated by the section's
  * own scroll progress.
  */
-export function CategoryRail({ products = PRODUCTS_SEED }: CategoryRailProps) {
+export function CategoryRail({ products }: CategoryRailProps) {
   const section = useRef<HTMLElement>(null)
   const track = useRef<HTMLDivElement>(null)
   const progress = useRef<HTMLDivElement>(null)
@@ -68,6 +67,8 @@ export function CategoryRail({ products = PRODUCTS_SEED }: CategoryRailProps) {
     },
     { dependencies: [reduceMotion], revertOnUpdate: true }
   )
+
+  if (products.length === 0) return null
 
   return (
     <section
@@ -162,7 +163,9 @@ export function CategoryRail({ products = PRODUCTS_SEED }: CategoryRailProps) {
                 <h3 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] md:text-[34px]">
                   Toutes les pièces
                 </h3>
-                <p className="mt-fib-1 text-sm text-white/65">{categories[0].count} disponibles</p>
+                <p className="mt-fib-1 text-sm text-white/65">
+                  {products.length} {products.length === 1 ? 'pièce' : 'pièces'} disponibles
+                </p>
                 <span className="mt-fib-3 inline-flex items-center gap-2 text-sm font-medium">
                   Ouvrir la boutique
                   <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />

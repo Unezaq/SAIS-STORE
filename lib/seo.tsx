@@ -9,7 +9,7 @@ import type {
   WithContext,
 } from 'schema-dts'
 import { clientEnv } from '@/lib/env'
-import { getProduct } from '@/lib/products'
+import { getStorefrontProduct } from '@/lib/products'
 
 /**
  * Structured data (JSON-LD) helpers, typed with `schema-dts` (Google's own
@@ -49,7 +49,6 @@ export function organizationJsonLd(): WithContext<Organization> {
     address: STORE_ADDRESS,
     contactPoint: {
       '@type': 'ContactPoint',
-      telephone: `+${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}`,
       contactType: 'customer service',
       areaServed: 'MA',
       availableLanguage: ['fr', 'ar'],
@@ -64,7 +63,6 @@ export function localBusinessJsonLd(): WithContext<LocalBusiness> {
     '@type': 'LocalBusiness',
     name: `${SITE_NAME} Kenitra`,
     image: `${SITE_URL}/products/sais-01.jpg`,
-    telephone: `+${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}`,
     address: STORE_ADDRESS,
     priceRange: '200-400 MAD',
     areaServed: ['Kenitra', 'Rabat', 'Casablanca', 'Maroc'],
@@ -92,7 +90,7 @@ export function websiteJsonLd(): WithContext<WebSite> {
 }
 
 export async function productJsonLd(slug: string): Promise<WithContext<Product> | null> {
-  const product = await getProduct(slug)
+  const product = await getStorefrontProduct(slug)
   if (!product) return null
 
   const offer: Offer = {

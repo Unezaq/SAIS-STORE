@@ -37,7 +37,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   }, [pathname, lenis])
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.div
         key={pathname}
         initial={false}
@@ -46,8 +46,8 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
         exit="exit"
         transition={
           reduceMotion
-            ? { duration: 0.2 }
-            : { duration: 0.42, ease: [0.32, 0.72, 0, 1] }
+            ? { duration: 0.12 }
+            : { duration: 0.18, ease: [0.32, 0.72, 0, 1] }
         }
         className="min-h-dvh"
       >

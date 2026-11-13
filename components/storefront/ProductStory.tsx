@@ -7,7 +7,6 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
 import { ArrowRight, ArrowUpRight } from 'lucide-react'
-import { PRODUCTS_SEED } from '@/lib/data'
 import type { Product } from '@/lib/data'
 import { formatMAD, cn } from '@/lib/utils'
 
@@ -19,10 +18,10 @@ gsap.registerPlugin(useGSAP, ScrollTrigger)
  * time — the visitor always knows exactly what is being offered.
  */
 export interface ProductStoryProps {
-  products?: Product[]
+  products: Product[]
 }
 
-export function ProductStory({ products = PRODUCTS_SEED }: ProductStoryProps) {
+export function ProductStory({ products }: ProductStoryProps) {
   const items = products.slice(0, 3)
   const [active, setActive] = useState(0)
   const root = useRef<HTMLDivElement>(null)
@@ -47,6 +46,8 @@ export function ProductStory({ products = PRODUCTS_SEED }: ProductStoryProps) {
     },
     { scope: root }
   )
+
+  if (items.length === 0) return null
 
   return (
     <section ref={root} className="mx-auto w-full max-w-7xl px-fib-3 py-fib-6 md:px-fib-4 md:py-fib-7">

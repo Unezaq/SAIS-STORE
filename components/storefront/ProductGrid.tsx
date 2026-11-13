@@ -1,6 +1,7 @@
 'use client'
 
 import { motion, useReducedMotion } from 'motion/react'
+import { useRouter } from 'next/navigation'
 import { ProductCard } from './ProductCard'
 import { useWishlist } from '@/hooks/useWishlist'
 
@@ -25,6 +26,7 @@ export function ProductGrid({
   emptyMessage = 'Aucune pièce dans cette collection pour le moment.',
   className,
 }: ProductGridProps) {
+  const router = useRouter()
   const reduceMotion = useReducedMotion()
   const { isLiked, toggle } = useWishlist()
 
@@ -60,7 +62,12 @@ export function ProductGrid({
           }
           className="min-w-0"
         >
-          <ProductCard {...p} isLiked={isLiked(p.id)} onToggleLike={toggle} />
+          <ProductCard
+            {...p}
+            isLiked={isLiked(p.id)}
+            onToggleLike={toggle}
+            onQuickAdd={() => router.push(`/products/${p.slug}`)}
+          />
         </motion.div>
       ))}
     </div>

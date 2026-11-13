@@ -6,20 +6,28 @@ import { ProductStory } from '@/components/storefront/ProductStory'
 import { HowToOrder } from '@/components/storefront/HowToOrder'
 import { Button } from '@/components/ui/Button'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
-import { clientEnv } from '@/lib/env'
-import { getProducts, getProduct } from '@/lib/products'
+import { getStorefrontProducts, getStorefrontProduct, getSettings } from '@/lib/products'
 
 export default async function StorefrontHomePage() {
-  const products = await getProducts()
-  const poster = (await getProduct('peignoir-douceur-bleu-celeste'))?.imageUrl ?? null
+  const [products, posterProduct, settings] = await Promise.all([
+    getStorefrontProducts(),
+    getStorefrontProduct('peignoir-douceur-bleu-celeste'),
+    getSettings(),
+  ])
+  const poster = posterProduct?.imageUrl ?? null
 
   const trust = [
-    { label: 'Livraison 24–48h', detail: 'Partout au Maroc' },
+    {
+      label: settings.deliveryFee === 0 ? 'Livraison gratuite' : `Livraison : ${settings.deliveryFee} MAD`,
+      detail: settings.freeDeliveryMinItems > 0
+        ? `Offerte dès ${settings.freeDeliveryMinItems} pièces · 24–48h au Maroc`
+        : '24–48h partout au Maroc',
+    },
     { label: 'Paiement à la livraison', detail: 'En espèces, à réception' },
     { label: 'Commande WhatsApp', detail: 'Confirmation en minutes' },
   ]
 
-  const whatsappUrl = `https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}?text=${encodeURIComponent(
+  const whatsappUrl = `https://wa.me/${settings.whatsappPhone}?text=${encodeURIComponent(
     'Bonjour SAIS, je souhaite passer une commande.'
   )}`
 
@@ -43,7 +51,10 @@ export default async function StorefrontHomePage() {
 
       <ProductStory products={products} />
 
-      <HowToOrder />
+      <HowToOrder
+        deliveryFee={settings.deliveryFee}
+        freeDeliveryMinItems={settings.freeDeliveryMinItems}
+      />
 
       {/* Closing CTA */}
       <ScrollReveal variant="fade-up">

@@ -1,58 +1,37 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+import { clientEnv } from '@/lib/env'
 
-/**
- * Middleware-compatible Supabase client for proxy.ts (edge runtime).
- * Si les variables d'environnement Supabase ne sont pas configurées, retourne
- * un mock client.
- */
-export function createMiddlewareClient() {
-  const cookieStore = cookies() as any
+export async function updateSession(request: NextRequest) {
+  let response = NextResponse.next({ request })
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabase = createServerClient(
+    clientEnv.NEXT_PUBLIC_SUPABASE_URL,
+    clientEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet, headers) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value)
+          })
 
-  const isConfigured =
-    url &&
-    key &&
-    !url.includes('placeholder') &&
-    !key.includes('placeholder') &&
-    url.startsWith('http')
-
-  if (!isConfigured) {
-    return {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            not: () => ({
-              order: () => Promise.resolve({ data: [], error: null }),
-              single: () => Promise.resolve({ data: null, error: null }),
-            }),
-            order: () => Promise.resolve({ data: [], error: null }),
-            single: () => Promise.resolve({ data: null, error: null }),
-          }),
-          order: () => Promise.resolve({ data: [], error: null }),
-          single: () => Promise.resolve({ data: null, error: null }),
-        }),
-      }),
-    } as any
-  }
-
-  return createServerClient(url, key, {
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
+          response = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options)
+          })
+          Object.entries(headers).forEach(([name, value]) => {
+            response.headers.set(name, value)
+          })
+        },
       },
-      set(name: string, value: string, options: CookieOptions) {
-        cookieStore.set({ name, value, ...options })
-      },
-      remove(name: string, options: CookieOptions) {
-        cookieStore.set({ name, value: '', ...options })
-      },
-    },
-  })
+    }
+  )
+
+  const { data, error } = await supabase.auth.getClaims()
+  if (error && error.status !== 401 && error.name !== 'AuthSessionMissingError') throw error
+
+  return { response, claims: data?.claims ?? null }
 }
-
-export type { CookieOptions }

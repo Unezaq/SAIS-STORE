@@ -6,12 +6,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ShoppingBag, Search, User, Heart } from 'lucide-react'
 import { categories } from '@/lib/data'
-import { clientEnv } from '@/lib/env'
 import { cn } from '@/lib/utils'
 
 export interface TopNavProps {
   cartCount?: number
   wishlistCount?: number
+  whatsappPhone: string
   onOpenCart?: () => void
   onOpenSearch?: () => void
 }
@@ -24,6 +24,7 @@ export interface TopNavProps {
 export function TopNav({
   cartCount = 0,
   wishlistCount = 0,
+  whatsappPhone,
   onOpenCart,
   onOpenSearch,
 }: TopNavProps) {
@@ -67,7 +68,7 @@ export function TopNav({
             Espace client
           </Link>
           <a
-            href={`https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}`}
+            href={`https://wa.me/${whatsappPhone}`}
             target="_blank"
             rel="noreferrer"
             className="transition-colors hover:text-ink"
@@ -135,9 +136,6 @@ export function TopNav({
                           </div>
                           <div className="p-fib-2">
                             <p className="text-[13px] font-semibold text-ink">{family.name}</p>
-                            <p className="tabular mt-0.5 text-[11px] text-text-muted">
-                              {family.count}
-                            </p>
                           </div>
                         </Link>
                       ))}

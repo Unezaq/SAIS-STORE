@@ -2,11 +2,11 @@
 
 import * as React from 'react'
 import { ProductGrid } from './ProductGrid'
-import { PRODUCTS_SEED } from '@/lib/data'
 import type { Product } from '@/lib/data'
 
 export interface ProductShopProps {
-  products?: Product[]
+  products: Product[]
+  emptyMessage?: string
 }
 import { cn } from '@/lib/utils'
 
@@ -24,12 +24,12 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
-export function ProductShop({ products = PRODUCTS_SEED }: ProductShopProps) {
+export function ProductShop({ products, emptyMessage }: ProductShopProps) {
   const [tab, setTab] = React.useState<TabId>('all')
 
   const filtered = React.useMemo(() => {
     if (tab === 'all') return products
-    if (tab === 'nouveautes') return products.filter((p) => Boolean(p.badge))
+    if (tab === 'nouveautes') return products.filter((p) => p.badge === 'Nouveau')
     return products.filter((p) => p.slugCategory === tab)
   }, [tab])
 
@@ -69,6 +69,7 @@ export function ProductShop({ products = PRODUCTS_SEED }: ProductShopProps) {
       <ProductGrid
         key={tab}
         products={filtered}
+        emptyMessage={emptyMessage}
         className="mt-fib-4 grid grid-cols-2 gap-x-fib-2 gap-y-fib-4 md:grid-cols-3 md:gap-x-fib-3 lg:grid-cols-4"
       />
     </section>

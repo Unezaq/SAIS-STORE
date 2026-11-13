@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
 import { categories, COLLECTION_SLUGS } from '@/lib/data'
-import { getProductsByCategory } from '@/lib/products'
+import { getStorefrontProductsByCategory } from '@/lib/products'
 
 const categoryTitle: Record<string, string> = {
   peignoirs: 'Peignoirs',
@@ -38,7 +38,7 @@ export default async function CollectionPage({
 }) {
   const { slug } = await params
 
-  const categoryProducts = await getProductsByCategory(slug)
+  const categoryProducts = await getStorefrontProductsByCategory(slug)
   const category = categories.find((c) => c.slug === slug)
 
   if (!category && !COLLECTION_SLUGS.includes(slug)) {

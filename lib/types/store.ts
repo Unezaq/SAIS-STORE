@@ -13,6 +13,8 @@ export interface StoreOrder {
     quantity: number
     price: number
   }>
+  subtotal: number
+  deliveryFee: number
   total: number
   status: 'en_attente' | 'confirmee' | 'expediee' | 'livree' | 'annulee'
   createdAt: string
@@ -31,28 +33,15 @@ export interface StoreClient {
   createdAt: string
 }
 
-export interface StoreClientAccount {
-  id: string
-  email: string
-  passwordHash: string
-  firstName: string
-  lastName: string
-  phone: string
-  address?: string
-  createdAt: string
-}
-
 export interface StoreSettings {
   storeName: string
   whatsappPhone: string
   deliveryText: string
   paymentText: string
   currency: string
-}
-
-export interface AdminAccount {
-  id: string
-  email: string
-  passwordHash: string
-  createdAt: string
+  deliveryFee: number
+  freeDeliveryMinItems: number
+  storewideDiscountPercent: number
+  discountStartDate?: string
+  discountEndDate?: string
 }

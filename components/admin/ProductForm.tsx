@@ -25,15 +25,21 @@ export function ProductForm({ initial }: { initial?: Product }) {
     setPending(true)
     setError(null)
 
-    const formData = new FormData(e.currentTarget)
-    const result = await saveProductAction(formData)
-    if (result?.ok) {
+    try {
+      const formData = new FormData(e.currentTarget)
+      const result = await saveProductAction(formData)
+      if (!result?.ok) {
+        setError('Erreur lors de la sauvegarde.')
+        showError("Échec de l'enregistrement", result?.error ?? 'Réessayez ou vérifiez votre connexion.')
+        return
+      }
       success('Produit enregistré', 'Le produit est maintenant en ligne.')
       router.push('/admin/products')
       router.refresh()
-    } else {
+    } catch {
       setError('Erreur lors de la sauvegarde.')
       showError("Échec de l'enregistrement", 'Réessayez ou vérifiez votre connexion.')
+    } finally {
       setPending(false)
     }
   }

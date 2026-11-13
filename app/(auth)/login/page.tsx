@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
@@ -15,15 +16,20 @@ export default function ClientLoginPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setPending(true)
-    const formData = new FormData(e.currentTarget)
-    const result = await clientLogin(formData)
-    if (result?.ok) {
-      success('Connexion réussie', 'Bienvenue sur votre compte SAIS.')
-      router.push('/account')
-      return
+    try {
+      const formData = new FormData(e.currentTarget)
+      const result = await clientLogin(formData)
+      if (result?.ok) {
+        success('Connexion réussie', 'Bienvenue sur votre compte SAIS.')
+        router.push('/account')
+        return
+      }
+      showError('Échec de la connexion', result?.error ?? 'Email ou mot de passe incorrect.')
+    } catch {
+      showError('Échec de la connexion', 'Vérifiez votre connexion et réessayez.')
+    } finally {
+      setPending(false)
     }
-    showError('Échec de la connexion', result?.error ?? 'Email ou mot de passe incorrect.')
-    setPending(false)
   }
 
   return (
@@ -56,9 +62,9 @@ export default function ClientLoginPage() {
         </form>
         <p className="mt-fib-3 text-center text-sm text-text-muted">
           Pas encore de compte ?{' '}
-          <a href="/register" className="text-ink font-medium hover:underline">
+          <Link href="/register" className="text-ink font-medium hover:underline">
             Créer un compte
-          </a>
+          </Link>
         </p>
       </div>
     </div>

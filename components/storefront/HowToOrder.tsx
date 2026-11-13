@@ -1,7 +1,7 @@
 import { MessageCircle, MousePointerClick, Wallet } from 'lucide-react'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 
-const steps = [
+const steps = (deliveryFee: number, freeDeliveryMinItems: number) => [
   {
     icon: MousePointerClick,
     title: 'Choisissez la pièce',
@@ -9,17 +9,25 @@ const steps = [
   },
   {
     icon: MessageCircle,
-    title: 'Confirmez sur WhatsApp',
-    body: 'Un message suffit : une conseillère valide votre commande en quelques minutes.',
+    title: 'Validez votre commande',
+    body: 'Ajoutez vos coordonnées de livraison et envoyez votre commande sans créer de compte.',
   },
   {
     icon: Wallet,
     title: 'Payez à la livraison',
-    body: 'Vous réglez en espèces à la réception, partout au Maroc, en 24–48h.',
+    body: `${deliveryFee > 0 ? `Livraison à ${deliveryFee} MAD` : 'Livraison gratuite'} partout au Maroc en 24–48h${freeDeliveryMinItems > 0 ? `, offerte dès ${freeDeliveryMinItems} pièces` : ''}. Vous réglez en espèces à la réception.`,
   },
 ]
 
-export function HowToOrder() {
+export function HowToOrder({
+  deliveryFee,
+  freeDeliveryMinItems,
+}: {
+  deliveryFee: number
+  freeDeliveryMinItems: number
+}) {
+  const orderSteps = steps(deliveryFee, freeDeliveryMinItems)
+
   return (
     <section className="mx-auto w-full max-w-7xl px-fib-3 pb-fib-6 md:px-fib-4 md:pb-fib-7">
       <ScrollReveal variant="fade-up">
@@ -30,7 +38,7 @@ export function HowToOrder() {
       </ScrollReveal>
 
       <div className="mt-fib-4 grid gap-fib-2 md:mt-fib-5 md:grid-cols-3 md:gap-fib-3">
-        {steps.map((step, index) => {
+        {orderSteps.map((step, index) => {
           const Icon = step.icon
           return (
             <ScrollReveal key={step.title} variant="fade-up" delay={index * 0.08}>

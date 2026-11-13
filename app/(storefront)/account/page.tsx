@@ -1,12 +1,11 @@
-import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { MessageCircle, Package, ShieldCheck, Truck, Clock, Mail, User } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
-import { clientEnv } from '@/lib/env'
-import { getOrdersByClientEmail, getClientByEmail } from '@/lib/products'
-import type { StoreOrder } from '@/lib/products'
+import { getClientByAuthUserId, getOrdersByAuthUserId } from '@/lib/store'
+import { getAuthenticatedUser } from '@/lib/supabase/auth'
+import { getSettings } from '@/lib/products'
 
 const reassurance = [
   {
@@ -26,19 +25,17 @@ const reassurance = [
   },
 ]
 
-async function getClientEmail(): Promise<string | null> {
-  const jar = await cookies()
-  return jar.get('sais_client')?.value ?? null
-}
-
 export default async function AccountPage() {
-  const clientEmail = await getClientEmail()
-  const whatsappPhone = clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE
+  const user = await getAuthenticatedUser()
+  const clientEmail = user?.email ?? null
+  const { whatsappPhone } = await getSettings()
 
   // Si client connecté → afficher ses commandes
-  if (clientEmail) {
-    const client = await getClientByEmail(clientEmail)
-    const orders = await getOrdersByClientEmail(clientEmail)
+  if (user && clientEmail) {
+    const [client, orders] = await Promise.all([
+      getClientByAuthUserId(user.id),
+      getOrdersByAuthUserId(user.id),
+    ])
 
     return (
       <div className="mx-auto w-full max-w-7xl px-fib-3 pt-fib-4 md:px-fib-4 md:pt-fib-5">
@@ -113,7 +110,7 @@ export default async function AccountPage() {
                   <th className="px-fib-3 py-3">N° commande</th>
                   <th className="px-fib-3 py-3">Date</th>
                   <th className="px-fib-3 py-3">Articles</th>
-                  <th className="px-fib-3 py-3">Total</th>
+                  <th className="px-fib-3 py-3">Total (livraison incluse)</th>
                   <th className="px-fib-3 py-3">Statut</th>
                 </tr>
               </thead>
@@ -192,7 +189,7 @@ export default async function AccountPage() {
           <br />
           <span className="text-xs text-green-600">
             Vous avez un compte ?{' '}
-            <a href="/login" className="text-ink font-medium hover:underline">Connectez-vous ici</a>
+            <Link href="/login" className="text-ink font-medium hover:underline">Connectez-vous ici</Link>
             pour suivre vos commandes automatiquement.
           </span>
         </p>

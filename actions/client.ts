@@ -1,83 +1,97 @@
 'use server'
 
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
-import {
-  verifyClientCredentials,
-  createClientAccount,
-} from '@/lib/products'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { z } from 'zod'
+import { ensureClientProfile } from '@/lib/store'
+import { clientEnv } from '@/lib/env'
+import { createClient } from '@/lib/supabase/server'
 
-/* ========================================================================
-   CLIENT LOGIN
-   ======================================================================== */
+function formString(formData: FormData, key: string): string {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function invalidInput(): { ok: false; error: string } {
+  return { ok: false, error: 'Veuillez vérifier les informations saisies.' }
+}
 
 export async function loginAction(formData: FormData) {
-  const email = String(formData.get('email') ?? '').trim().toLowerCase()
-  const password = String(formData.get('password') ?? '')
+  const parsed = z.object({
+    email: z.email(),
+    password: z.string().min(1).max(256),
+  }).safeParse({
+    email: formString(formData, 'email').toLowerCase(),
+    password: formString(formData, 'password'),
+  })
+  if (!parsed.success) return invalidInput()
 
-  const client = await verifyClientCredentials(email, password)
-  if (!client) {
-    return { ok: false, error: 'Email ou mot de passe incorrect.' }
-  }
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInWithPassword(parsed.data)
+  if (error) return { ok: false, error: 'Email ou mot de passe incorrect.' }
 
-  const jar = await cookies()
-  jar.set('sais_client', email, { httpOnly: true, sameSite: 'lax', path: '/' })
   return { ok: true }
 }
 
 export async function logoutClientAction() {
-  const jar = await cookies()
-  jar.delete('sais_client')
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
   redirect('/')
 }
 
-/* ========================================================================
-   CLIENT REGISTER
-   ======================================================================== */
-
 export async function registerClientAction(formData: FormData) {
-  'use server'
-  const email = String(formData.get('email') ?? '').trim().toLowerCase()
-  const password = String(formData.get('password') ?? '')
-  const firstName = String(formData.get('firstName') ?? '').trim()
-  const lastName = String(formData.get('lastName') ?? '').trim()
-  const phone = String(formData.get('phone') ?? '').trim()
-  const address = String(formData.get('address') ?? '').trim()
-
-  if (!email || !password || !firstName || !lastName || !phone) {
-    return { ok: false, error: 'Tous les champs sont obligatoires.' }
-  }
-  if (password.length < 6) {
-    return { ok: false, error: 'Le mot de passe doit contenir au moins 6 caractères.' }
-  }
-
-  // Hash password before sending to store
-  const { hashPassword } = await import('@/lib/utils/crypto')
-  const passwordHash = await hashPassword(password)
-
-  // We need to pass the hash, but createClientAccount expects plain password and hashes internally.
-  // Let's modify: createClientAccount now expects pre-hashed password? No, looking at my store.ts,
-  // createClientAccount receives password and stores it directly as password_hash.
-  // I need to fix this: the action should hash before calling createClientAccount.
-  
-  // Since createClientAccount stores password_hash directly, we pass the hash as password
-  // But the function name says "password" — let me adjust by calling with hash
-  const result = await createClientAccount({
-    email,
-    password: passwordHash, // Already hashed
-    firstName,
-    lastName,
-    phone,
-    address,
+  const parsed = z.object({
+    email: z.email(),
+    password: z.string().min(8).max(128),
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    phone: z.string().trim().regex(/^\+?[\d\s()-]{9,18}$/),
+    address: z.string().trim().max(500),
+  }).safeParse({
+    email: formString(formData, 'email').toLowerCase(),
+    password: formString(formData, 'password'),
+    firstName: formString(formData, 'firstName'),
+    lastName: formString(formData, 'lastName'),
+    phone: formString(formData, 'phone'),
+    address: formString(formData, 'address'),
   })
-  if ('error' in result) {
-    return { ok: false, error: result.error }
+  if (!parsed.success) return invalidInput()
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: {
+      data: {
+        first_name: parsed.data.firstName,
+        last_name: parsed.data.lastName,
+        phone: parsed.data.phone,
+        address: parsed.data.address,
+      },
+      emailRedirectTo: `${clientEnv.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/account`,
+    },
+  })
+
+  if (error) {
+    return { ok: false, error: 'Impossible de créer ce compte. Vérifiez les informations ou connectez-vous.' }
+  }
+  if (!data.user || data.user.identities?.length === 0) {
+    return { ok: false, error: 'Un compte avec cette adresse existe peut-être déjà.' }
   }
 
-  // Auto-connect après inscription
-  const jar = await cookies()
-  jar.set('sais_client', email, { httpOnly: true, sameSite: 'lax', path: '/' })
+  const requiresEmailConfirmation = !data.session || !data.user.email_confirmed_at
+  if (data.user.email_confirmed_at) {
+    await ensureClientProfile({
+      authUserId: data.user.id,
+      email: parsed.data.email,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      phone: parsed.data.phone,
+      address: parsed.data.address,
+    })
+  }
+
   revalidatePath('/account')
-  return { ok: true }
+  return { ok: true, requiresEmailConfirmation }
 }

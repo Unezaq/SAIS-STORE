@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, LogOut } from 'lucide-react'
-import { logoutAction } from '@/actions/admin'
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings } from 'lucide-react'
+import { LogoutButton } from '@/components/admin/LogoutButton'
+import { requireAdmin } from '@/lib/supabase/auth'
 
 const nav = [
   { label: 'Tableau de bord', href: '/admin', icon: LayoutDashboard },
@@ -10,7 +11,9 @@ const nav = [
   { label: 'Paramètres', href: '/admin/settings', icon: Settings },
 ]
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  await requireAdmin()
+
   return (
     <div className="flex min-h-dvh bg-surface-soft text-ink">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-hairline bg-white md:flex">
@@ -36,15 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             })}
           </ul>
         </nav>
-        <form action={logoutAction} className="border-t border-hairline p-3">
-          <button
-            type="submit"
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-text-muted transition-colors hover:bg-surface-soft hover:text-ink"
-          >
-            <LogOut size={17} strokeWidth={1.8} />
-            Déconnexion
-          </button>
-        </form>
+        <LogoutButton />
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-hairline bg-white px-6 md:hidden">

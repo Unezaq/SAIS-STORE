@@ -8,7 +8,7 @@ import { ProductGallery } from '@/components/storefront/ProductGallery'
 import { getGalleryImages } from '@/lib/gallery'
 import { Badge } from '@/components/ui/Badge'
 import { JsonLd, productJsonLd, breadcrumbJsonLd } from '@/lib/seo'
-import { getProduct, getProducts } from '@/lib/products'
+import { getSettings, getStorefrontProduct, getStorefrontProducts } from '@/lib/products'
 import { categories } from '@/lib/data'
 import { formatMAD } from '@/lib/utils'
 
@@ -18,7 +18,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>
 }): Promise<Metadata> {
   const { slug } = await params
-  const product = await getProduct(slug)
+  const product = await getStorefrontProduct(slug)
 
   if (!product) return { title: 'Pièce introuvable' }
 
@@ -53,13 +53,16 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const product = await getProduct(slug)
+  const [product, settings] = await Promise.all([
+    getStorefrontProduct(slug),
+    getSettings(),
+  ])
 
   if (!product) {
     notFound()
   }
 
-  const allProducts = await getProducts()
+  const allProducts = await getStorefrontProducts()
   const related = allProducts.filter((p) => p.id !== product.id).slice(0, 4)
   const jsonLd = await productJsonLd(product.slug)
 
@@ -128,7 +131,12 @@ export default async function ProductPage({
 
             {/* Quantity + Actions */}
             <ScrollReveal variant="fade-up" delay={0.15}>
-              <ProductActions product={product} />
+              <ProductActions
+                product={product}
+                deliveryFee={settings.deliveryFee}
+                freeDeliveryMinItems={settings.freeDeliveryMinItems}
+                whatsappPhone={settings.whatsappPhone}
+              />
             </ScrollReveal>
 
             {/* Description + details */}

@@ -4,8 +4,12 @@ import { Sparkles } from 'lucide-react'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
 import { JsonLd, breadcrumbJsonLd } from '@/lib/seo'
-import { discountPercent, getPromoProducts, getProducts } from '@/lib/products'
-import { clientEnv } from '@/lib/env'
+import {
+  discountPercent,
+  getStorefrontPromoProducts,
+  getStorefrontProducts,
+  getSettings,
+} from '@/lib/products'
 import { formatMAD } from '@/lib/utils'
 
 export const metadata: Metadata = {
@@ -20,8 +24,11 @@ export const metadata: Metadata = {
  * A single savings total keeps the offer concrete instead of vague.
  */
 export default async function PromotionsPage() {
-  const promoProducts = await getPromoProducts()
-  const allProducts = await getProducts()
+  const [promoProducts, allProducts, settings] = await Promise.all([
+    getStorefrontPromoProducts(),
+    getStorefrontProducts(),
+    getSettings(),
+  ])
   const totalSavings = promoProducts.reduce(
     (sum, p) => sum + (p.originalPrice! - p.price),
     0
@@ -44,11 +51,18 @@ export default async function PromotionsPage() {
         <header className="mx-auto w-full max-w-7xl px-fib-3 pt-fib-4 md:px-fib-4 md:pt-fib-6">
           <p className="text-eyebrow uppercase text-text-muted">Offres en cours</p>
           <h1 className="mt-fib-2 text-title text-ink [text-wrap:balance]">
-            Promotions — jusqu&apos;à -{maxDiscount}%
+            {promoProducts.length > 0
+              ? `Promotions — jusqu'à -${maxDiscount}%`
+              : 'Aucune promotion en cours'}
           </h1>
           <p className="mt-fib-2 max-w-xl text-sm leading-relaxed text-text-muted md:text-[15px]">
-            {promoProducts.length} pièces à prix réduit, pour une durée limitée. Même
-            qualité, même livraison 24–48h, paiement à la réception.
+            {promoProducts.length} pièces à prix réduit.{' '}
+            {settings.deliveryFee > 0
+              ? `Livraison à ${settings.deliveryFee} MAD`
+              : 'Livraison gratuite'}
+            {settings.freeDeliveryMinItems > 0 &&
+              `, offerte dès ${settings.freeDeliveryMinItems} pièces`}
+            , paiement à la réception.
           </p>
         </header>
       </ScrollReveal>
@@ -102,7 +116,7 @@ export default async function PromotionsPage() {
               coloris et disponibilité.
             </p>
             <a
-              href={`https://wa.me/${clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE}`}
+              href={`https://wa.me/${settings.whatsappPhone}`}
               target="_blank"
               rel="noreferrer"
               className="press mt-fib-3 inline-flex items-center gap-2 rounded-full bg-white px-fib-3 py-fib-1 text-sm font-medium text-primary hover:bg-white/90"

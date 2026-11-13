@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { formatMAD, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
+import { useCart } from '@/components/storefront/CartProvider'
 import { clientEnv } from '@/lib/env'
 
 interface ProductColor {
@@ -12,9 +13,14 @@ interface ProductColor {
 }
 
 interface ProductActionsProps {
+  deliveryFee: number
+  freeDeliveryMinItems: number
+  whatsappPhone: string
   product: {
+    slug: string
     title: string
     price: number
+    imageUrl: string
     originalPrice?: number
     ref?: string
     sizes?: string[]
@@ -23,16 +29,27 @@ interface ProductActionsProps {
   }
 }
 
-export function ProductActions({ product }: ProductActionsProps) {
+export function ProductActions({
+  product,
+  deliveryFee,
+  freeDeliveryMinItems,
+  whatsappPhone,
+}: ProductActionsProps) {
   const [quantity, setQuantity] = useState(1)
   const [size, setSize] = useState<string | null>(product.sizes?.[0] ?? null)
   const [color, setColor] = useState<string | null>(product.colors?.[0]?.name ?? null)
-  const whatsappPhone = clientEnv.NEXT_PUBLIC_WHATSAPP_PHONE
+  const [added, setAdded] = useState(false)
+  const { addItem } = useCart()
 
+  const productUrl = new URL(
+    `/products/${encodeURIComponent(product.slug)}`,
+    clientEnv.NEXT_PUBLIC_SITE_URL
+  ).toString()
+  const imageUrl = new URL(product.imageUrl, clientEnv.NEXT_PUBLIC_SITE_URL).toString()
   const message = encodeURIComponent(
-    `Bonjour SAIS, je souhaite commander :\n${product.title}\n${
-      product.ref ? `Réf : ${product.ref}\n` : ''
-    }${color ? `Couleur : ${color}\n` : ''}${size ? `Taille : ${size}\n` : ''}Prix : ${formatMAD(product.price)}\nQuantité : ${quantity}\nMerci !`
+    `Bonjour SAIS 👋\nJe souhaite commander ce produit :\n\n${product.title}\n${
+      product.ref ? `Réf. : ${product.ref}\n` : ''
+    }${color ? `Couleur : ${color}\n` : ''}${size ? `Taille : ${size}\n` : ''}Prix unitaire : ${formatMAD(product.price)}\nQuantité : ${quantity}\n\nPhoto : ${imageUrl}\nFiche produit : ${productUrl}\nMerci !`
   )
   const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${message}`
 
@@ -136,11 +153,37 @@ export function ProductActions({ product }: ProductActionsProps) {
               Commander via WhatsApp
             </Button>
           </a>
-          <Button size="lg" variant="outline" className="w-full sm:w-auto">
+          <Button
+            type="button"
+            size="lg"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              addItem({
+                slug: product.slug,
+                title: product.title,
+                imageUrl: product.imageUrl,
+                price: product.price,
+                quantity,
+                size: size ?? undefined,
+                color: color ?? undefined,
+              })
+              setAdded(true)
+            }}
+          >
             Ajouter au panier
           </Button>
         </div>
       </div>
+      {added && (
+        <p role="status" className="text-sm font-medium text-primary">
+          Ajouté au panier.
+        </p>
+      )}
+      <p className="text-xs text-text-muted">
+        {deliveryFee > 0 ? `Livraison ${formatMAD(deliveryFee)}` : 'Livraison gratuite'}
+        {freeDeliveryMinItems > 0 && ` · offerte dès ${freeDeliveryMinItems} pièces dans la commande`}
+      </p>
     </div>
   )
 }
