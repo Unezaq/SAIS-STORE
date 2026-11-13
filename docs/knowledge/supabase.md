@@ -23,6 +23,7 @@ import { createBrowserClient } from '@supabase/ssr'
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 }
@@ -37,6 +38,7 @@ export async function createClient() {
   const cookieStore = await cookies() // async in Next.js 15+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
@@ -90,4 +92,28 @@ export async function createClient() {
 - **orders**: authenticated can INSERT own; authenticated can SELECT own; admin can SELECT/UPDATE all
 - **site_content/settings**: anon can SELECT; admin can UPDATE
 - **Storage (product-images)**: anon can SELECT; admin can INSERT/UPDATE/DELETE
+
+## Project Environment Setup
+
+1. Open the project in the Supabase Dashboard.
+2. In **Project Settings → API**, copy the **Project URL** into `NEXT_PUBLIC_SUPABASE_URL`.
+3. In **Project Settings → API Keys**, copy the **Publishable key** into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. If the project only provides the legacy `anon` key, use `NEXT_PUBLIC_SUPABASE_ANON_KEY` instead; the app supports both.
+4. Put the values in `.env.local` at the repository root, next to `package.json`:
+
+   ```dotenv
+   NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
+   NEXT_PUBLIC_WHATSAPP_PHONE=<country-code-and-number>
+   ADMIN_EMAIL=<admin-email>
+   ADMIN_PASSWORD=<strong-admin-password>
+   ```
+
+   Replace every `<...>` value with the real value before starting the app. Restart `pnpm dev` after changing environment variables.
+
+`SUPABASE_SERVICE_ROLE_KEY` is not needed for the current client setup. If a server-only feature later requires it, get it from **Project Settings → API Keys** and keep it server-only: never add the `NEXT_PUBLIC_` prefix, commit it, or share it in chat.
+
+Keep `.env.local` private and untracked. The publishable key is intended for app clients; never use a secret/service-role key as a publishable key.
+
+Before testing data flows, confirm the Supabase database already has the tables and RLS policies the app needs. This repository does not currently include database migrations to create them.
 
