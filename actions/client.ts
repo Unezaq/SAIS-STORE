@@ -18,6 +18,26 @@ function invalidInput(): { ok: false; error: string } {
   return { ok: false, error: 'Veuillez vérifier les informations saisies.' }
 }
 
+function signupErrorMessage(code: string | undefined): string {
+  switch (code) {
+    case 'email_exists':
+    case 'user_already_exists':
+      return 'Un compte utilise déjà cette adresse. Connectez-vous ou utilisez une autre adresse.'
+    case 'weak_password':
+      return 'Le mot de passe est trop faible. Choisissez un mot de passe plus robuste.'
+    case 'over_email_send_rate_limit':
+      return 'Trop de tentatives. Attendez quelques minutes avant de réessayer.'
+    case 'signup_disabled':
+      return 'Les inscriptions sont actuellement désactivées. Contactez SAIS.'
+    case 'email_provider_disabled':
+      return 'La création de comptes par email est désactivée. Contactez SAIS.'
+    case 'email_address_invalid':
+      return 'Cette adresse email n’est pas valide.'
+    default:
+      return 'Impossible de créer ce compte. Vérifiez les informations ou connectez-vous.'
+  }
+}
+
 export async function loginAction(formData: FormData) {
   const parsed = z.object({
     email: z.email(),
@@ -120,7 +140,11 @@ export async function registerClientAction(formData: FormData) {
   })
 
   if (error) {
-    return { ok: false, error: 'Impossible de créer ce compte. Vérifiez les informations ou connectez-vous.' }
+    console.error('Supabase customer signup failed.', {
+      code: error.code ?? 'unknown',
+      status: error.status,
+    })
+    return { ok: false, error: signupErrorMessage(error.code) }
   }
   if (!data.user || data.user.identities?.length === 0) {
     return { ok: false, error: 'Un compte avec cette adresse existe peut-être déjà.' }
