@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClientOrderAction } from '@/actions/admin'
 import { Button } from '@/components/ui/Button'
 import { useCart } from '@/components/storefront/CartProvider'
-import type { StoreOrder, StoreSettings } from '@/lib/types/store'
+import type { StoreClient, StoreOrder, StoreSettings } from '@/lib/types/store'
 import { clientEnv } from '@/lib/env'
 import { formatMAD } from '@/lib/utils'
 
@@ -18,7 +18,13 @@ interface Confirmation {
 const fieldClassName =
   'w-full rounded-xl border border-hairline bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
 
-export function CheckoutForm({ settings }: { settings: StoreSettings }) {
+export function CheckoutForm({
+  settings,
+  profile,
+}: {
+  settings: StoreSettings
+  profile: Pick<StoreClient, 'email' | 'firstName' | 'lastName' | 'phone' | 'address'> | null
+}) {
   const { items, subtotal, ready, clearCart } = useCart()
   const itemCount = items.reduce((total, item) => total + item.quantity, 0)
   const deliveryFee =
@@ -137,11 +143,23 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
         <p className="mt-1 text-sm text-text-muted">
           Paiement en espèces à la réception. Aucun paiement en ligne n’est demandé.
         </p>
+        {profile && (
+          <p className="mt-2 text-xs text-text-muted">
+            Vos coordonnées enregistrées sont préremplies. Vous pouvez les modifier pour cette commande.
+          </p>
+        )}
 
         <div className="mt-6 grid gap-4">
           <label className="grid gap-1.5 text-sm font-medium text-ink">
             Nom complet
-            <input name="customerName" autoComplete="name" required maxLength={160} className={fieldClassName} />
+            <input
+              name="customerName"
+              autoComplete="name"
+              defaultValue={profile ? `${profile.firstName} ${profile.lastName}`.trim() : ''}
+              required
+              maxLength={160}
+              className={fieldClassName}
+            />
           </label>
           <label className="grid gap-1.5 text-sm font-medium text-ink">
             Téléphone
@@ -149,6 +167,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
               name="phone"
               type="tel"
               autoComplete="tel"
+              defaultValue={profile?.phone ?? ''}
               placeholder="+212 6 44 81 65 44"
               required
               maxLength={18}
@@ -160,6 +179,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
             <textarea
               name="address"
               autoComplete="street-address"
+              defaultValue={profile?.address ?? ''}
               required
               maxLength={500}
               rows={3}
@@ -168,7 +188,14 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
           </label>
           <label className="grid gap-1.5 text-sm font-medium text-ink">
             Email <span className="font-normal text-text-muted">(facultatif)</span>
-            <input name="clientEmail" type="email" autoComplete="email" maxLength={254} className={fieldClassName} />
+            <input
+              name="clientEmail"
+              type="email"
+              autoComplete="email"
+              defaultValue={profile?.email ?? ''}
+              maxLength={254}
+              className={fieldClassName}
+            />
           </label>
           <label className="grid gap-1.5 text-sm font-medium text-ink">
             Note pour la livraison <span className="font-normal text-text-muted">(facultatif)</span>

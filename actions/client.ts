@@ -3,9 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import { ensureClientProfile } from '@/lib/store'
+import { ensureClientProfile, updateClientProfileByAuthUserId } from '@/lib/store'
 import { clientEnv } from '@/lib/env'
 import { bootstrapConfiguredAdmin } from '@/lib/supabase/bootstrap-admin'
+import { getAuthenticatedUser } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
 function formString(formData: FormData, key: string): string {
@@ -47,6 +48,36 @@ export async function logoutClientAction() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
   redirect('/')
+}
+
+export async function updateClientProfileAction(formData: FormData) {
+  const parsed = z.object({
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    phone: z.string().trim().regex(/^\+?[\d\s()-]{9,18}$/),
+    address: z.string().trim().min(1).max(500),
+  }).safeParse({
+    firstName: formString(formData, 'firstName'),
+    lastName: formString(formData, 'lastName'),
+    phone: formString(formData, 'phone'),
+    address: formString(formData, 'address'),
+  })
+  if (!parsed.success) return invalidInput()
+
+  const user = await getAuthenticatedUser()
+  if (!user?.email) {
+    return { ok: false, error: 'Connectez-vous pour modifier vos informations.' }
+  }
+
+  await updateClientProfileByAuthUserId({
+    authUserId: user.id,
+    email: user.email,
+    ...parsed.data,
+  })
+
+  revalidatePath('/account')
+  revalidatePath('/checkout')
+  return { ok: true }
 }
 
 export async function registerClientAction(formData: FormData) {

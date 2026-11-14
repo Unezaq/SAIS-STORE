@@ -369,6 +369,32 @@ export async function ensureClientProfile(profile: {
   return mapClient(clientRow as ClientRow)
 }
 
+export async function updateClientProfileByAuthUserId(profile: {
+  authUserId: string
+  email: string
+  firstName: string
+  lastName: string
+  phone: string
+  address: string
+}): Promise<void> {
+  const client = await ensureClientProfile(profile)
+  const supabase = createAdminClient()
+  const { error } = await supabase
+    .from('clients')
+    .update({
+      first_name: profile.firstName,
+      last_name: profile.lastName,
+      phone: profile.phone,
+      address: profile.address,
+    })
+    .eq('id', client.id)
+    .eq('auth_user_id', profile.authUserId)
+    .select('id')
+    .single()
+
+  if (error) throw error
+}
+
 export const getSettings = cache(async function getSettings(): Promise<StoreSettings> {
   const supabase = await createClient()
   const { data, error } = await supabase

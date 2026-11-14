@@ -1,8 +1,9 @@
 import Link from 'next/link'
-import { MessageCircle, Package, ShieldCheck, Truck, Clock, Mail, User } from 'lucide-react'
+import { Heart, MessageCircle, Package, ShieldCheck, Truck, Clock, Mail, User } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
+import { AccountProfileForm } from '@/components/storefront/AccountProfileForm'
 import { getClientByAuthUserId, getOrdersByAuthUserId } from '@/lib/store'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
 import { getSettings } from '@/lib/products'
@@ -57,6 +58,13 @@ export default async function AccountPage() {
               <p className="mt-1 text-sm text-text-muted">{clientEmail}</p>
             </div>
             <div className="flex items-center gap-2">
+              <Link
+                href="/wishlist"
+                className="press inline-flex items-center gap-2 rounded-full border border-hairline px-fib-3 py-fib-1 text-sm font-medium text-ink hover:bg-surface-soft"
+              >
+                <Heart size={15} />
+                Mes favoris
+              </Link>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white text-xs font-medium">
                 {client?.orderCount} commande{client?.orderCount !== 1 ? 's' : ''}
               </span>
@@ -86,6 +94,15 @@ export default async function AccountPage() {
             </div>
           </div>
         </div>
+
+        <AccountProfileForm
+          profile={{
+            firstName: client?.firstName ?? '',
+            lastName: client?.lastName ?? '',
+            phone: client?.phone ?? '',
+            address: client?.address,
+          }}
+        />
 
         {/* Mes commandes */}
         <div className="rounded-[24px] bg-white shadow-sm ring-1 ring-hairline">

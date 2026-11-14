@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { CheckoutForm } from '@/components/storefront/CheckoutForm'
+import { getClientByAuthUserId } from '@/lib/store'
 import { getSettings } from '@/lib/products'
+import { getAuthenticatedUser } from '@/lib/supabase/auth'
 
 export const metadata: Metadata = {
   title: 'Finaliser ma commande',
@@ -9,7 +11,8 @@ export const metadata: Metadata = {
 }
 
 export default async function CheckoutPage() {
-  const settings = await getSettings()
+  const [settings, user] = await Promise.all([getSettings(), getAuthenticatedUser()])
+  const client = user ? await getClientByAuthUserId(user.id) : null
 
   return (
     <div className="mx-auto w-full max-w-7xl px-fib-3 py-fib-5 md:px-fib-4 md:py-fib-7">
@@ -17,7 +20,7 @@ export default async function CheckoutPage() {
         <p className="text-eyebrow uppercase text-text-muted">Paiement à la livraison</p>
         <h1 className="mt-2 text-title text-ink">Finaliser ma commande</h1>
       </header>
-      <CheckoutForm settings={settings} />
+      <CheckoutForm settings={settings} profile={client} />
     </div>
   )
 }
