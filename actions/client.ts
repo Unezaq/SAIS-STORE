@@ -126,17 +126,25 @@ export async function registerClientAction(formData: FormData) {
     return { ok: false, error: 'Un compte avec cette adresse existe peut-être déjà.' }
   }
 
-  const requiresEmailConfirmation = !data.session || !data.user.email_confirmed_at
+  const requiresEmailConfirmation = !data.session
   let isBootstrapAdmin = false
-  if (data.user.email_confirmed_at) {
-    await ensureClientProfile({
-      authUserId: data.user.id,
-      email: parsed.data.email,
-      firstName: parsed.data.firstName,
-      lastName: parsed.data.lastName,
-      phone: parsed.data.phone,
-      address: parsed.data.address,
-    })
+  if (data.session) {
+    try {
+      await ensureClientProfile({
+        authUserId: data.user.id,
+        email: parsed.data.email,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        phone: parsed.data.phone,
+        address: parsed.data.address,
+      })
+    } catch (profileError) {
+      console.error('Failed to save customer profile after signup.', profileError)
+      return {
+        ok: false,
+        error: 'Votre compte a été créé, mais son profil n’a pas pu être enregistré. Contactez SAIS pour finaliser le compte.',
+      }
+    }
     isBootstrapAdmin = await bootstrapConfiguredAdmin(data.user.id)
     if (isBootstrapAdmin && data.session) {
       const { error: refreshError } = await supabase.auth.refreshSession()

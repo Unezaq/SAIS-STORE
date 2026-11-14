@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
     lastName: profile.data.last_name,
     phone: profile.data.phone,
     address: profile.data.address,
+  }, {
+    allowEmailBasedLinking: true,
   })
 
   const isBootstrapAdmin = await bootstrapConfiguredAdmin(data.user.id)

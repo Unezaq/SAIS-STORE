@@ -316,7 +316,7 @@ export async function ensureClientProfile(profile: {
   lastName: string
   phone: string
   address?: string
-}): Promise<StoreClient> {
+}, options: { allowEmailBasedLinking?: boolean } = {}): Promise<StoreClient> {
   const supabase = createAdminClient()
   const email = profile.email.toLowerCase()
 
@@ -340,6 +340,9 @@ export async function ensureClientProfile(profile: {
     if (existing?.auth_user_id && existing.auth_user_id !== profile.authUserId) {
       throw new Error('This customer profile is already linked to another account.')
     }
+    if (existing && !options.allowEmailBasedLinking) {
+      throw new Error('Email verification is required to link an existing customer profile.')
+    }
 
     const values = {
       auth_user_id: profile.authUserId,
@@ -358,14 +361,16 @@ export async function ensureClientProfile(profile: {
     clientRow = data
   }
 
-  const escapedEmail = email.replace(/[\\%_]/g, '\\$&')
-  const { error: ordersError } = await supabase
-    .from('orders')
-    .update({ auth_user_id: profile.authUserId })
-    .is('auth_user_id', null)
-    .ilike('client_email', escapedEmail)
+  if (options.allowEmailBasedLinking) {
+    const escapedEmail = email.replace(/[\\%_]/g, '\\$&')
+    const { error: ordersError } = await supabase
+      .from('orders')
+      .update({ auth_user_id: profile.authUserId })
+      .is('auth_user_id', null)
+      .ilike('client_email', escapedEmail)
 
-  if (ordersError) throw ordersError
+    if (ordersError) throw ordersError
+  }
   return mapClient(clientRow as ClientRow)
 }
 
