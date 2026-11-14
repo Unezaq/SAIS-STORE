@@ -1,39 +1,25 @@
 import { NextResponse } from 'next/server'
+import { clientEnv } from '@/lib/env'
 
-/**
- * Google ping endpoint — notifie Google du nouveau sitemap.
- * À appeler après chaque mise à jour du catalogue :
- *   curl -X POST https://monsite.com/api/ping
- */
-export async function POST() {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-  const sitemapUrl = `${base}/sitemap.xml`
-
-  try {
-    const res = await fetch(
-      `https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`,
-      { method: 'GET' }
-    )
-    const text = await res.text()
-
-    return NextResponse.json({
-      ok: true,
-      sitemap: sitemapUrl,
-      google: res.status,
-      body: text.slice(0, 200),
-    })
-  } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    )
-  }
-}
+const sitemapUrl = `${clientEnv.NEXT_PUBLIC_SITE_URL}/sitemap.xml`
+const retiredMessage =
+  'Google has retired the sitemap ping endpoint. Submit the sitemap through Search Console or list it in robots.txt.'
 
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    message: 'POST to /api/ping to notify Google of sitemap changes',
-    sitemap: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/sitemap.xml`,
+    message: retiredMessage,
+    sitemap: sitemapUrl,
   })
+}
+
+export async function POST() {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: retiredMessage,
+      sitemap: sitemapUrl,
+    },
+    { status: 410 }
+  )
 }

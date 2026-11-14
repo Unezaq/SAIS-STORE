@@ -327,34 +327,46 @@ export async function ensureClientProfile(profile: {
     .maybeSingle()
 
   if (linkedError) throw linkedError
-  if (linked) return mapClient(linked as ClientRow)
+  let clientRow = linked
 
-  const { data: existing, error: existingError } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('email', email)
-    .maybeSingle()
+  if (!clientRow) {
+    const { data: existing, error: existingError } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle()
 
-  if (existingError) throw existingError
-  if (existing?.auth_user_id && existing.auth_user_id !== profile.authUserId) {
-    throw new Error('This customer profile is already linked to another account.')
+    if (existingError) throw existingError
+    if (existing?.auth_user_id && existing.auth_user_id !== profile.authUserId) {
+      throw new Error('This customer profile is already linked to another account.')
+    }
+
+    const values = {
+      auth_user_id: profile.authUserId,
+      email,
+      first_name: profile.firstName,
+      last_name: profile.lastName,
+      phone: profile.phone,
+      address: profile.address ?? null,
+    }
+    const query = existing
+      ? supabase.from('clients').update(values).eq('id', existing.id)
+      : supabase.from('clients').insert(values)
+    const { data, error } = await query.select('*').single()
+
+    if (error) throw error
+    clientRow = data
   }
 
-  const values = {
-    auth_user_id: profile.authUserId,
-    email,
-    first_name: profile.firstName,
-    last_name: profile.lastName,
-    phone: profile.phone,
-    address: profile.address ?? null,
-  }
-  const query = existing
-    ? supabase.from('clients').update(values).eq('id', existing.id)
-    : supabase.from('clients').insert(values)
-  const { data, error } = await query.select('*').single()
+  const escapedEmail = email.replace(/[\\%_]/g, '\\$&')
+  const { error: ordersError } = await supabase
+    .from('orders')
+    .update({ auth_user_id: profile.authUserId })
+    .is('auth_user_id', null)
+    .ilike('client_email', escapedEmail)
 
-  if (error) throw error
-  return mapClient(data as ClientRow)
+  if (ordersError) throw ordersError
+  return mapClient(clientRow as ClientRow)
 }
 
 export const getSettings = cache(async function getSettings(): Promise<StoreSettings> {

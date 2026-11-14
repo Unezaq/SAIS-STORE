@@ -46,7 +46,7 @@ export function ProductForm({ initial }: { initial?: Product }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-fib-4">
-      <input type="hidden" name="id" defaultValue={initial?.id ?? `p-${Date.now()}`} />
+      <input type="hidden" name="id" defaultValue={initial?.id ?? ''} />
       <div className="grid gap-fib-3 md:grid-cols-2">
         <Input label="Titre" name="title" defaultValue={initial?.title} required />
         <Input label="Slug (URL)" name="slug" defaultValue={initial?.slug} required />

@@ -37,14 +37,19 @@ export default function AdminLoginPage() {
         <p className="text-eyebrow uppercase text-text-muted">SAIS Store</p>
         <h1 className="mt-fib-1 text-title text-ink">Connexion admin</h1>
         <p className="mt-fib-1 text-sm text-text-muted">
-          Connectez-vous avec votre compte administrateur.
+          Utilisez l&apos;email et le mot de passe de votre compte administrateur Supabase.
         </p>
-        <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
+        <form
+          onSubmit={handleSubmit}
+          aria-busy={pending}
+          className="mt-fib-3 flex flex-col gap-fib-2"
+        >
           <Input
             label="Email"
             name="email"
             type="email"
             placeholder="admin@votre-domaine.ma"
+            autoComplete="email"
             required
             autoFocus
           />
@@ -53,6 +58,7 @@ export default function AdminLoginPage() {
             name="password"
             type="password"
             placeholder="••••••••"
+            autoComplete="current-password"
             required
           />
           <Button type="submit" size="lg" className="w-full" isLoading={pending} disabled={pending}>

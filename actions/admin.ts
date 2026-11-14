@@ -1,5 +1,6 @@
 'use server'
 
+import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
@@ -148,7 +149,7 @@ export async function saveProductAction(formData: FormData): Promise<ActionResul
   const rawColors = parseColors(formString(formData, 'colors'))
   const rawColorImages = parseJsonField(formString(formData, 'colorImages'))
   const parsed = productSchema.safeParse({
-    id: formString(formData, 'id'),
+    id: formString(formData, 'id') || `p-${randomUUID()}`,
     title: formString(formData, 'title'),
     slug: formString(formData, 'slug'),
     slugCategory: formString(formData, 'slugCategory'),
