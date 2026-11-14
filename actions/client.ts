@@ -30,6 +30,12 @@ export async function loginAction(formData: FormData) {
 
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword(parsed.data)
+  if (error?.code === 'email_not_confirmed') {
+    return {
+      ok: false,
+      error: 'Confirmez votre adresse email avec le lien reçu avant de vous connecter.',
+    }
+  }
   if (error) return { ok: false, error: 'Email ou mot de passe incorrect.' }
 
   const isBootstrapAdmin = data.user

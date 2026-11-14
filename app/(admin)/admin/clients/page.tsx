@@ -13,7 +13,7 @@ export default async function AdminClientsPage() {
 
       {clients.length === 0 ? (
         <div className="rounded-[20px] bg-white p-fib-4 text-center text-text-muted shadow-sm ring-1 ring-hairline">
-          Aucun client pour le moment. Les clients apparaissent ici après la première commande.
+          Aucun client pour le moment. Les comptes apparaissent après confirmation de l’email, et les clients invités après leur première commande.
         </div>
       ) : (
         <div className="overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
