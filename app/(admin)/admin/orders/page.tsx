@@ -25,13 +25,14 @@ export default async function AdminOrdersPage() {
           Aucune commande pour le moment.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
+          <table className="w-full min-w-[960px] text-sm">
             <thead className="bg-surface-soft text-left text-[11px] uppercase tracking-[0.12em] text-text-muted">
               <tr>
                 <th className="px-4 py-3">ID</th>
                 <th className="px-4 py-3">Client</th>
                 <th className="px-4 py-3">Téléphone</th>
+                <th className="px-4 py-3">Adresse de livraison</th>
                 <th className="px-4 py-3">Articles</th>
                 <th className="px-4 py-3">Total (livraison incluse)</th>
                 <th className="px-4 py-3">Statut</th>
@@ -44,6 +45,9 @@ export default async function AdminOrdersPage() {
                   <td className="px-4 py-3 font-mono text-xs text-text-muted">{o.id}</td>
                   <td className="px-4 py-3 font-medium text-ink">{o.customerName}</td>
                   <td className="px-4 py-3 tabular text-text-muted">{o.phone}</td>
+                  <td className="max-w-[18rem] whitespace-normal break-words px-4 py-3 text-xs text-text-muted">
+                    {o.address}
+                  </td>
                   <td className="px-4 py-3 text-xs text-text-muted">
                     {o.items.map((i) => `${i.title} (${i.color ?? '—'}, ${i.size ?? '—'}) ×${i.quantity}`).join(' · ')}
                   </td>
