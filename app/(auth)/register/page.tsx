@@ -48,7 +48,7 @@ export default function ClientRegisterPage() {
         <p className="text-eyebrow uppercase text-text-muted">SAIS Store</p>
         <h1 className="mt-fib-1 text-title text-ink">Créer votre compte</h1>
         <p className="mt-fib-1 text-sm text-text-muted">
-          Confirmez votre adresse email après l’inscription pour activer votre compte et retrouver vos commandes.
+          Créez votre espace client pour retrouver vos informations et suivre vos commandes.
         </p>
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
           <Input label="Prénom" name="firstName" autoComplete="given-name" required autoFocus />
