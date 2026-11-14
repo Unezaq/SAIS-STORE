@@ -24,8 +24,13 @@ export default function ClientRegisterPage() {
           success('Compte créé', 'Consultez votre email pour confirmer votre adresse.')
           router.push('/login')
         } else {
-          success('Compte créé', 'Bienvenue chez SAIS ! Vous êtes connecté.')
-          router.push('/account')
+          success(
+            'Compte créé',
+            result.isBootstrapAdmin
+              ? 'Votre compte administrateur est prêt.'
+              : 'Bienvenue chez SAIS ! Vous êtes connecté.'
+          )
+          router.push(result.isBootstrapAdmin ? '/admin' : '/account')
         }
         return
       }
@@ -46,12 +51,31 @@ export default function ClientRegisterPage() {
           Vos informations sont sécurisées et servent pour vos commandes et livraisons.
         </p>
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
-          <Input label="Prénom" name="firstName" required autoFocus />
-          <Input label="Nom de famille" name="lastName" required />
-          <Input label="Email" name="email" type="email" required />
-          <Input label="Téléphone" name="phone" placeholder="06 12 34 56 78" required />
-          <Input label="Adresse de livraison" name="address" placeholder="Rue, ville, code postal" />
-          <Input label="Mot de passe" name="password" type="password" minLength={8} required />
+          <Input label="Prénom" name="firstName" autoComplete="given-name" required autoFocus />
+          <Input label="Nom de famille" name="lastName" autoComplete="family-name" required />
+          <Input label="Email" name="email" type="email" autoComplete="email" required />
+          <Input
+            label="Téléphone"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            placeholder="06 12 34 56 78"
+            required
+          />
+          <Input
+            label="Adresse de livraison"
+            name="address"
+            autoComplete="street-address"
+            placeholder="Rue, ville, code postal"
+          />
+          <Input
+            label="Mot de passe"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
           <Button type="submit" size="lg" className="w-full" isLoading={pending} disabled={pending}>
             {pending ? 'Création…' : 'Créer le compte'}
           </Button>

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { ensureClientProfile } from '@/lib/store'
+import { bootstrapConfiguredAdmin } from '@/lib/supabase/bootstrap-admin'
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
@@ -47,5 +48,11 @@ export async function GET(request: NextRequest) {
     address: profile.data.address,
   })
 
-  return NextResponse.redirect(new URL(next, request.url))
+  const isBootstrapAdmin = await bootstrapConfiguredAdmin(data.user.id)
+  if (isBootstrapAdmin) {
+    const { error: refreshError } = await supabase.auth.refreshSession()
+    if (refreshError) throw refreshError
+  }
+
+  return NextResponse.redirect(new URL(isBootstrapAdmin ? '/admin' : next, request.url))
 }

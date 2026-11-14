@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { ensureClientProfile } from '@/lib/store'
 import { clientEnv } from '@/lib/env'
+import { bootstrapConfiguredAdmin } from '@/lib/supabase/bootstrap-admin'
 import { createClient } from '@/lib/supabase/server'
 
 function formString(formData: FormData, key: string): string {
@@ -27,10 +28,18 @@ export async function loginAction(formData: FormData) {
   if (!parsed.success) return invalidInput()
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword(parsed.data)
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data)
   if (error) return { ok: false, error: 'Email ou mot de passe incorrect.' }
 
-  return { ok: true }
+  const isBootstrapAdmin = data.user
+    ? await bootstrapConfiguredAdmin(data.user.id)
+    : false
+  if (isBootstrapAdmin) {
+    const { error: refreshError } = await supabase.auth.refreshSession()
+    if (refreshError) throw refreshError
+  }
+
+  return { ok: true, isBootstrapAdmin }
 }
 
 export async function logoutClientAction() {
@@ -81,6 +90,7 @@ export async function registerClientAction(formData: FormData) {
   }
 
   const requiresEmailConfirmation = !data.session || !data.user.email_confirmed_at
+  let isBootstrapAdmin = false
   if (data.user.email_confirmed_at) {
     await ensureClientProfile({
       authUserId: data.user.id,
@@ -90,8 +100,13 @@ export async function registerClientAction(formData: FormData) {
       phone: parsed.data.phone,
       address: parsed.data.address,
     })
+    isBootstrapAdmin = await bootstrapConfiguredAdmin(data.user.id)
+    if (isBootstrapAdmin && data.session) {
+      const { error: refreshError } = await supabase.auth.refreshSession()
+      if (refreshError) throw refreshError
+    }
   }
 
   revalidatePath('/account')
-  return { ok: true, requiresEmailConfirmation }
+  return { ok: true, requiresEmailConfirmation, isBootstrapAdmin }
 }

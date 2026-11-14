@@ -20,8 +20,13 @@ export default function ClientLoginPage() {
       const formData = new FormData(e.currentTarget)
       const result = await clientLogin(formData)
       if (result?.ok) {
-        success('Connexion réussie', 'Bienvenue sur votre compte SAIS.')
-        router.push('/account')
+        success(
+          'Connexion réussie',
+          result.isBootstrapAdmin
+            ? 'Bienvenue dans votre espace administrateur.'
+            : 'Bienvenue sur votre compte SAIS.'
+        )
+        router.push(result.isBootstrapAdmin ? '/admin' : '/account')
         return
       }
       showError('Échec de la connexion', result?.error ?? 'Email ou mot de passe incorrect.')
@@ -46,6 +51,7 @@ export default function ClientLoginPage() {
             name="email"
             type="email"
             placeholder="vous@email.com"
+            autoComplete="email"
             required
             autoFocus
           />
@@ -54,6 +60,7 @@ export default function ClientLoginPage() {
             name="password"
             type="password"
             placeholder="••••••••"
+            autoComplete="current-password"
             required
           />
           <Button type="submit" size="lg" className="w-full" isLoading={pending} disabled={pending}>
