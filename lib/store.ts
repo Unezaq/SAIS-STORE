@@ -279,11 +279,54 @@ export async function createOrder(
 
   if (error) throw error
 
-  if (authUserId && order.clientEmail) {
+  if (authUserId) {
     await updateClientStats(supabase, authUserId, order.total)
+  } else {
+    await saveGuestClientFromOrder(supabase, order)
   }
 
   return mapOrder(data as OrderRow)
+}
+
+async function saveGuestClientFromOrder(
+  supabase: ReturnType<typeof createAdminClient>,
+  order: Omit<StoreOrder, 'id' | 'createdAt'>
+): Promise<void> {
+  const { data: existing, error: readError } = await supabase
+    .from('clients')
+    .select('id, email, order_count, total_spent')
+    .is('auth_user_id', null)
+    .eq('phone', order.phone)
+    .limit(1)
+    .maybeSingle()
+
+  if (readError) throw readError
+
+  const [firstName = '', ...lastNameParts] = order.customerName.trim().split(/\s+/)
+  const values = {
+    email: order.clientEmail?.toLowerCase() ?? existing?.email ?? null,
+    first_name: firstName,
+    last_name: lastNameParts.join(' '),
+    phone: order.phone,
+    address: order.address,
+  }
+
+  const { error } = existing
+    ? await supabase
+        .from('clients')
+        .update({
+          ...values,
+          order_count: (existing.order_count ?? 0) + 1,
+          total_spent: (existing.total_spent ?? 0) + order.total,
+        })
+        .eq('id', existing.id)
+    : await supabase.from('clients').insert({
+        ...values,
+        order_count: 1,
+        total_spent: order.total,
+      })
+
+  if (error) throw error
 }
 
 export async function getClients(): Promise<StoreClient[]> {
