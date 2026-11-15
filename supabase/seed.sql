@@ -60,7 +60,7 @@ create table if not exists client_accounts (
 create table if not exists clients (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid references auth.users(id) on delete set null,
-  email text unique not null,
+  email text,
   first_name text not null,
   last_name text not null,
   phone text not null,

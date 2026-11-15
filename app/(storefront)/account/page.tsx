@@ -17,10 +17,9 @@ import { getSettings } from '@/lib/products'
 
 export default async function AccountPage() {
   const user = await getAuthenticatedUser()
-  if (!user?.email) redirect('/login?next=%2Faccount')
+  if (!user) redirect('/login?next=%2Faccount')
   if (user.app_metadata?.role === 'admin') redirect('/admin')
 
-  const clientEmail = user.email
   const { whatsappPhone } = await getSettings()
   const [client, orders] = await Promise.all([
     getClientByAuthUserId(user.id),
@@ -44,7 +43,9 @@ export default async function AccountPage() {
             <h2 className="text-heading text-ink">
               {client?.firstName} {client?.lastName}
             </h2>
-            <p className="mt-1 text-sm text-text-muted">{clientEmail}</p>
+            <p className="mt-1 text-sm text-text-muted">
+              {client?.email || client?.phone || user.phone || ''}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Link

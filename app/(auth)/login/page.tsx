@@ -29,7 +29,7 @@ export default function ClientLoginPage() {
         router.push(result.isBootstrapAdmin ? '/admin' : '/account')
         return
       }
-      showError('Échec de la connexion', result?.error ?? 'Email ou mot de passe incorrect.')
+      showError('Échec de la connexion', result?.error ?? 'Téléphone/email ou mot de passe incorrect.')
     } catch {
       showError('Échec de la connexion', 'Vérifiez votre connexion et réessayez.')
     } finally {
@@ -47,11 +47,11 @@ export default function ClientLoginPage() {
         </p>
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
           <Input
-            label="Email"
-            name="email"
-            type="email"
-            placeholder="vous@email.com"
-            autoComplete="email"
+            label="Téléphone ou email"
+            name="identifier"
+            type="text"
+            placeholder="06 12 34 56 78"
+            autoComplete="username"
             required
             autoFocus
           />

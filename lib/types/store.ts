@@ -23,7 +23,7 @@ export interface StoreOrder {
 
 export interface StoreClient {
   id: string
-  email: string
+  email: string | null
   firstName: string
   lastName: string
   phone: string

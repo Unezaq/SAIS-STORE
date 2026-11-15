@@ -44,7 +44,7 @@ type OrderRow = {
 type ClientRow = {
   id: string
   auth_user_id: string | null
-  email: string
+  email: string | null
   first_name: string
   last_name: string
   phone: string
@@ -311,14 +311,14 @@ export async function getClientByAuthUserId(userId: string): Promise<StoreClient
 
 export async function ensureClientProfile(profile: {
   authUserId: string
-  email: string
+  email: string | null
   firstName: string
   lastName: string
   phone: string
   address?: string
 }, options: { allowEmailBasedLinking?: boolean } = {}): Promise<StoreClient> {
   const supabase = createAdminClient()
-  const email = profile.email.toLowerCase()
+  const email = profile.email?.trim().toLowerCase() || null
 
   const { data: linked, error: linkedError } = await supabase
     .from('clients')
@@ -329,19 +329,20 @@ export async function ensureClientProfile(profile: {
   if (linkedError) throw linkedError
   let clientRow = linked
 
-  if (!clientRow) {
-    const { data: existing, error: existingError } = await supabase
+  if (!clientRow && email && options.allowEmailBasedLinking) {
+    const { data: matches, error: existingError } = await supabase
       .from('clients')
       .select('*')
       .eq('email', email)
-      .maybeSingle()
+      .limit(2)
 
     if (existingError) throw existingError
-    if (existing?.auth_user_id && existing.auth_user_id !== profile.authUserId) {
+    const existingClient = matches?.length === 1 ? matches[0] : null
+    if (
+      existingClient?.auth_user_id &&
+      existingClient.auth_user_id !== profile.authUserId
+    ) {
       throw new Error('This customer profile is already linked to another account.')
-    }
-    if (existing && !options.allowEmailBasedLinking) {
-      throw new Error('Email verification is required to link an existing customer profile.')
     }
 
     const values = {
@@ -352,16 +353,32 @@ export async function ensureClientProfile(profile: {
       phone: profile.phone,
       address: profile.address ?? null,
     }
-    const query = existing
-      ? supabase.from('clients').update(values).eq('id', existing.id)
+    const query = existingClient
+      ? supabase.from('clients').update(values).eq('id', existingClient.id)
       : supabase.from('clients').insert(values)
     const { data, error } = await query.select('*').single()
 
     if (error) throw error
     clientRow = data
+  } else if (!clientRow) {
+    const { data, error } = await supabase
+      .from('clients')
+      .insert({
+        auth_user_id: profile.authUserId,
+        email,
+        first_name: profile.firstName,
+        last_name: profile.lastName,
+        phone: profile.phone,
+        address: profile.address ?? null,
+      })
+      .select('*')
+      .single()
+
+    if (error) throw error
+    clientRow = data
   }
 
-  if (options.allowEmailBasedLinking) {
+  if (options.allowEmailBasedLinking && email) {
     const escapedEmail = email.replace(/[\\%_]/g, '\\$&')
     const { error: ordersError } = await supabase
       .from('orders')
@@ -376,7 +393,7 @@ export async function ensureClientProfile(profile: {
 
 export async function updateClientProfileByAuthUserId(profile: {
   authUserId: string
-  email: string
+  email: string | null
   firstName: string
   lastName: string
   phone: string

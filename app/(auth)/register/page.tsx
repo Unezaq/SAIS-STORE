@@ -20,18 +20,13 @@ export default function ClientRegisterPage() {
       const formData = new FormData(e.currentTarget)
       const result = await registerClientAction(formData)
       if (result?.ok) {
-        if (result.requiresEmailConfirmation) {
-          success('Compte créé', 'Consultez votre email pour confirmer votre adresse.')
-          router.push('/login')
-        } else {
-          success(
-            'Compte créé',
-            result.isBootstrapAdmin
-              ? 'Votre compte administrateur est prêt.'
-              : 'Bienvenue chez SAIS ! Vous êtes connecté.'
-          )
-          router.push(result.isBootstrapAdmin ? '/admin' : '/account')
-        }
+        success(
+          'Compte créé',
+          result.isBootstrapAdmin
+            ? 'Votre compte administrateur est prêt.'
+            : 'Bienvenue chez SAIS ! Vous êtes connecté.'
+        )
+        router.push(result.isBootstrapAdmin ? '/admin' : '/account')
         return
       }
       showError('Échec de linscription', result?.error ?? 'Une erreur est survenue.')
@@ -53,7 +48,7 @@ export default function ClientRegisterPage() {
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
           <Input label="Prénom" name="firstName" autoComplete="given-name" required autoFocus />
           <Input label="Nom de famille" name="lastName" autoComplete="family-name" required />
-          <Input label="Email" name="email" type="email" autoComplete="email" required />
+          <Input label="Email (facultatif)" name="email" type="email" autoComplete="email" />
           <Input
             label="Téléphone"
             name="phone"
@@ -67,6 +62,7 @@ export default function ClientRegisterPage() {
             name="address"
             autoComplete="street-address"
             placeholder="Rue, ville, code postal"
+            required
           />
           <Input
             label="Mot de passe"
