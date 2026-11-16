@@ -6,9 +6,9 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
-import { registerClientAction } from '@/actions/client'
+import { registerCustomerAction } from '@/actions/customer-auth'
 
-export default function ClientRegisterPage() {
+export default function RegisterPage() {
   const router = useRouter()
   const { success, error: showError } = useToast()
   const [pending, setPending] = useState(false)
@@ -18,20 +18,15 @@ export default function ClientRegisterPage() {
     setPending(true)
     try {
       const formData = new FormData(e.currentTarget)
-      const result = await registerClientAction(formData)
-      if (result?.ok) {
-        success(
-          'Compte créé',
-          result.isBootstrapAdmin
-            ? 'Votre compte administrateur est prêt.'
-            : 'Bienvenue chez SAIS ! Vous êtes connecté.'
-        )
-        router.push(result.isBootstrapAdmin ? '/admin' : '/account')
+      const result = await registerCustomerAction(formData)
+      if (result.ok) {
+        success('Compte créé', "Bienvenue chez SAIS ! Vous êtes connecté.")
+        router.push('/account')
         return
       }
-      showError('Échec de linscription', result?.error ?? 'Une erreur est survenue.')
+      showError("Échec de l'inscription", result.error)
     } catch {
-      showError('Échec de linscription', 'Vérifiez votre connexion et réessayez.')
+      showError("Échec de l'inscription", 'Vérifiez votre connexion et réessayez.')
     } finally {
       setPending(false)
     }
@@ -46,22 +41,43 @@ export default function ClientRegisterPage() {
           Créez votre espace client pour retrouver vos informations et suivre vos commandes.
         </p>
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
-          <Input label="Prénom" name="firstName" autoComplete="given-name" required autoFocus />
-          <Input label="Nom de famille" name="lastName" autoComplete="family-name" required />
-          <Input label="Email (facultatif)" name="email" type="email" autoComplete="email" />
+          <Input
+            label="Nom complet"
+            name="fullName"
+            autoComplete="name"
+            placeholder="Prénom Nom"
+            required
+            autoFocus
+          />
+          <Input
+            label="Ville"
+            name="city"
+            autoComplete="address-level2"
+            placeholder="Kenitra"
+            required
+          />
+          <Input
+            label="Adresse complète"
+            name="address"
+            autoComplete="street-address"
+            placeholder="Rue, quartier, code postal"
+            required
+          />
+          <Input
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="vous@exemple.ma"
+            required
+          />
           <Input
             label="Téléphone"
             name="phone"
             type="tel"
             autoComplete="tel"
             placeholder="06 12 34 56 78"
-            required
-          />
-          <Input
-            label="Adresse de livraison"
-            name="address"
-            autoComplete="street-address"
-            placeholder="Rue, ville, code postal"
+            helperText="C'est avec ce numéro que vous vous connecterez."
             required
           />
           <Input
@@ -70,6 +86,7 @@ export default function ClientRegisterPage() {
             type="password"
             autoComplete="new-password"
             minLength={8}
+            helperText="Au moins 8 caractères, une majuscule, une minuscule et un chiffre."
             required
           />
           <Button type="submit" size="lg" className="w-full" isLoading={pending} disabled={pending}>

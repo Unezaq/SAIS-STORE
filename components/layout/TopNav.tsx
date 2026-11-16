@@ -12,6 +12,7 @@ export interface TopNavProps {
   cartCount?: number
   wishlistCount?: number
   whatsappPhone: string
+  isAdmin?: boolean
   onOpenCart?: () => void
   onOpenSearch?: () => void
 }
@@ -25,6 +26,7 @@ export function TopNav({
   cartCount = 0,
   wishlistCount = 0,
   whatsappPhone,
+  isAdmin = false,
   onOpenCart,
   onOpenSearch,
 }: TopNavProps) {
@@ -64,9 +66,17 @@ export function TopNav({
           <Link href="/promotions" className="transition-colors hover:text-ink">
             Promotions
           </Link>
+          <Link href="/suivre" className="transition-colors hover:text-ink">
+            Suivre ma commande
+          </Link>
           <Link href="/espace-client" className="transition-colors hover:text-ink">
             Espace client
           </Link>
+          {isAdmin && (
+            <Link href="/admin" className="font-medium text-primary transition-colors hover:text-ink">
+              Admin
+            </Link>
+          )}
           <a
             href={`https://wa.me/${whatsappPhone}`}
             target="_blank"

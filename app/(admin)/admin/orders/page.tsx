@@ -1,62 +1,120 @@
+import Link from 'next/link'
 import { getOrders } from '@/lib/products'
 import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
+import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
+import { ORDER_STATUSES, ORDER_STATUS_LABELS, isOrderStatus, orderReference } from '@/lib/orderStatus'
+import { formatMAD } from '@/lib/utils'
 
-const STATUS_LABELS: Record<string, string> = {
-  en_attente: 'En attente',
-  confirmee: 'Confirmée',
-  expediee: 'Expédiée',
-  livree: 'Livrée',
-  annulee: 'Annulée',
-}
-
-export default async function AdminOrdersPage() {
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>
+}) {
+  const { status: rawStatus } = await searchParams
+  const status = rawStatus && isOrderStatus(rawStatus) ? rawStatus : 'all'
   const orders = await getOrders()
+  const filtered = status === 'all' ? orders : orders.filter((order) => order.status === status)
+  const pending = orders.filter((order) => order.status === 'en_attente').length
+
+  const filters = [
+    { value: 'all', label: `Toutes (${orders.length})` },
+    ...ORDER_STATUSES.map((value) => ({
+      value,
+      label: `${ORDER_STATUS_LABELS[value]} (${orders.filter((order) => order.status === value).length})`,
+    })),
+  ]
 
   return (
     <div className="flex flex-col gap-fib-4">
       <div>
         <p className="text-eyebrow uppercase text-text-muted">Ventes</p>
         <h1 className="mt-fib-1 text-title text-ink">Commandes</h1>
-        <p className="mt-fib-1 text-sm text-text-muted">{orders.length} commande{orders.length > 1 ? 's' : ''}.</p>
+        <p className="mt-fib-1 text-sm text-text-muted">
+          {orders.length} commande{orders.length > 1 ? 's' : ''} · {pending} en attente de
+          confirmation. Ouvrez une commande pour appeler la cliente et changer son statut.
+        </p>
       </div>
 
-      {orders.length === 0 ? (
+      <div className="flex flex-wrap gap-2">
+        {filters.map((filter) => {
+          const active = filter.value === status
+          return (
+            <Link
+              key={filter.value}
+              href={filter.value === 'all' ? '/admin/orders' : `/admin/orders?status=${filter.value}`}
+              className={`press rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition-colors ${
+                active
+                  ? 'bg-ink text-white ring-ink'
+                  : 'bg-white text-text-muted ring-hairline hover:text-ink'
+              }`}
+            >
+              {filter.label}
+            </Link>
+          )
+        })}
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="rounded-[20px] bg-white p-fib-4 text-center text-text-muted shadow-sm ring-1 ring-hairline">
-          Aucune commande pour le moment.
+          Aucune commande dans ce filtre.
         </div>
       ) : (
         <div className="overflow-x-auto rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
-          <table className="w-full min-w-[960px] text-sm">
+          <table className="w-full min-w-[880px] text-sm">
             <thead className="bg-surface-soft text-left text-[11px] uppercase tracking-[0.12em] text-text-muted">
               <tr>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Client</th>
+                <th className="px-4 py-3">Référence</th>
+                <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Téléphone</th>
-                <th className="px-4 py-3">Adresse de livraison</th>
                 <th className="px-4 py-3">Articles</th>
-                <th className="px-4 py-3">Total (livraison incluse)</th>
+                <th className="px-4 py-3">Total</th>
                 <th className="px-4 py-3">Statut</th>
                 <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-surface-soft/60">
-                  <td className="px-4 py-3 font-mono text-xs text-text-muted">{o.id}</td>
-                  <td className="px-4 py-3 font-medium text-ink">{o.customerName}</td>
-                  <td className="px-4 py-3 tabular text-text-muted">{o.phone}</td>
-                  <td className="max-w-[18rem] whitespace-normal break-words px-4 py-3 text-xs text-text-muted">
-                    {o.address}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-text-muted">
-                    {o.items.map((i) => `${i.title} (${i.color ?? '—'}, ${i.size ?? '—'}) ×${i.quantity}`).join(' · ')}
-                  </td>
-                  <td className="px-4 py-3 tabular font-medium">{o.total} MAD</td>
+              {filtered.map((order) => (
+                <tr key={order.id} className="hover:bg-surface-soft/60">
                   <td className="px-4 py-3">
-                    <OrderStatusSelect orderId={o.id} currentStatus={o.status} />
+                    <Link
+                      href={`/admin/orders/${order.id}`}
+                      className="font-mono text-xs font-semibold text-ink hover:underline"
+                    >
+                      {orderReference(order.id)}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-ink">{order.customerName}</td>
+                  <td className="px-4 py-3 tabular text-text-muted">
+                    <a href={`tel:${order.phone}`} className="hover:text-ink hover:underline">
+                      {order.phone}
+                    </a>
+                  </td>
+                  <td className="max-w-[20rem] whitespace-normal px-4 py-3 text-xs text-text-muted">
+                    {order.items
+                      .map(
+                        (item) =>
+                          `${item.title} (${item.color ?? '—'}, ${item.size ?? '—'}) ×${item.quantity}`
+                      )
+                      .join(' · ')}
+                  </td>
+                  <td className="px-4 py-3 tabular font-medium text-ink">{formatMAD(order.total)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1.5">
+                      <OrderStatusBadge status={order.status} />
+                      <OrderStatusSelect orderId={order.id} currentStatus={order.status} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-text-muted">
-                    {new Date(o.createdAt).toLocaleDateString('fr-MA')}
+                    {new Date(order.createdAt).toLocaleDateString('fr-MA')}
+                  </td>
+                  <td className="px-4 py-3 text-end">
+                    <Link
+                      href={`/admin/orders/${order.id}`}
+                      className="text-xs font-medium text-ink hover:underline"
+                    >
+                      Détail →
+                    </Link>
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,6 @@
 /**
  * lib/products.ts — Point d'entrée unique pour les données.
- * Toutes les fonctions délèguent à lib/store.ts (Supabase).
+ * Toutes les fonctions délèguent à lib/store.ts, lib/coupons.ts et lib/addresses.ts.
  */
 
 export {
@@ -14,6 +14,8 @@ export {
   getOrders,
   getOrdersByAuthUserId,
   updateOrderStatus,
+  getOrderByToken,
+  getOrderDetail,
   getClients,
   getClientByAuthUserId,
   ensureClientProfile,
@@ -21,6 +23,22 @@ export {
   getSettings,
   updateSettings,
 } from './store'
+
+export {
+  getCoupons,
+  upsertCoupon,
+  deleteCoupon,
+  toggleCoupon,
+  validateCoupon,
+} from './coupons'
+
+export {
+  getAddresses,
+  upsertAddress,
+  deleteAddress,
+  getDefaultAddress,
+  getAdminAddresses,
+} from './addresses'
 
 import {
   getProduct,
@@ -38,11 +56,16 @@ import type {
 } from './types/store'
 
 export type {
-  Product,
   StoreOrder,
   StoreClient,
   StoreSettings,
-}
+  StoreCoupon,
+  StoreAddress,
+  StoreProductVariant,
+  CouponValidationResult,
+} from './types/store'
+
+export type { Product } from './data'
 
 export { discountPercent } from './data'
 

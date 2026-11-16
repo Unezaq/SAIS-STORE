@@ -13,7 +13,13 @@ import { formatMAD } from '@/lib/utils'
 import { useWishlist } from '@/hooks/useWishlist'
 import type { StoreSettings } from '@/lib/types/store'
 
-export function AdaptiveNavigation({ settings }: { settings: StoreSettings }) {
+export function AdaptiveNavigation({
+  settings,
+  isAdmin = false,
+}: {
+  settings: StoreSettings
+  isAdmin?: boolean
+}) {
   const [cartOpen, setCartOpen] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
   const { items, count, subtotal, ready, updateQuantity, removeItem } = useCart()
@@ -29,6 +35,7 @@ export function AdaptiveNavigation({ settings }: { settings: StoreSettings }) {
         cartCount={count}
         wishlistCount={wishlistCount}
         whatsappPhone={settings.whatsappPhone}
+        isAdmin={isAdmin}
         onOpenCart={() => setCartOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
       />

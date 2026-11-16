@@ -1,5 +1,9 @@
+import type { OrderStatus } from '@/lib/orderStatus'
+
 export interface StoreOrder {
   id: string
+  orderNumber?: string
+  trackingToken?: string
   clientEmail?: string
   clientName?: string
   customerName: string
@@ -14,9 +18,13 @@ export interface StoreOrder {
     price: number
   }>
   subtotal: number
+  discountTotal: number
   deliveryFee: number
   total: number
-  status: 'en_attente' | 'confirmee' | 'expediee' | 'livree' | 'annulee'
+  couponCode?: string
+  paymentMethod: string
+  paymentStatus: string
+  status: OrderStatus
   createdAt: string
   note?: string
 }
@@ -33,6 +41,15 @@ export interface StoreClient {
   createdAt: string
 }
 
+export type ViewerRole = 'admin' | 'customer' | 'guest'
+
+export interface StoreViewer {
+  role: ViewerRole
+  isAdmin: boolean
+  isSignedIn: boolean
+  firstName: string | null
+}
+
 export interface StoreSettings {
   storeName: string
   whatsappPhone: string
@@ -44,4 +61,48 @@ export interface StoreSettings {
   storewideDiscountPercent: number
   discountStartDate?: string
   discountEndDate?: string
+}
+
+export interface StoreCoupon {
+  id: string
+  code: string
+  type: 'percentage' | 'fixed'
+  value: number
+  minOrder: number
+  startsAt: string
+  expiresAt?: string
+  maxUses?: number
+  usedCount: number
+  perUserLimit?: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StoreAddress {
+  id: string
+  label: string
+  fullName: string
+  phone: string
+  city: string
+  address: string
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StoreProductVariant {
+  id: string
+  productId: string
+  size?: string
+  color?: string
+  stock: number
+  priceAdjustment: number
+  sku?: string
+}
+
+export interface CouponValidationResult {
+  valid: boolean
+  discountAmount: number
+  message: string
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateClientProfileAction } from '@/actions/client'
+import { updateCustomerProfileAction } from '@/actions/customer-profile'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
@@ -20,7 +20,7 @@ export function AccountProfileForm({ profile }: { profile: AccountProfile }) {
     setPending(true)
 
     try {
-      const result = await updateClientProfileAction(new FormData(event.currentTarget))
+      const result = await updateCustomerProfileAction(new FormData(event.currentTarget))
       if (!result.ok) {
         showError('Impossible de modifier le profil', result.error)
         return
@@ -39,7 +39,7 @@ export function AccountProfileForm({ profile }: { profile: AccountProfile }) {
     <section className="mb-fib-4 rounded-[24px] bg-white p-fib-4 shadow-sm ring-1 ring-hairline">
       <h2 className="text-heading text-ink">Mes coordonnées de livraison</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Modifiez vos informations enregistrées. Les anciennes commandes garderont leur adresse d’origine.
+        Modifiez vos informations enregistrées. Les anciennes commandes garderont leur adresse d'origine.
       </p>
       <form onSubmit={handleSubmit} className="mt-fib-3 grid gap-fib-2 sm:grid-cols-2">
         <Input

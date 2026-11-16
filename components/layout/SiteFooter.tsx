@@ -25,7 +25,7 @@ export function SiteFooter({
     { label: 'Promotions', href: '/promotions' },
     { label: 'Nouveautés', href: '/collections/nouveautes' },
     { label: 'Espace client', href: '/espace-client' },
-    { label: 'Suivre ma commande', href: '/account' },
+    { label: 'Suivre ma commande', href: '/suivre' },
     { label: 'Nous écrire', href: `https://wa.me/${whatsappPhone}` },
   ]
 

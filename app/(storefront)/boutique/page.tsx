@@ -47,7 +47,7 @@ export default async function BoutiquePage({
           <p className="mt-fib-2 max-w-xl text-sm leading-relaxed text-text-muted md:text-[15px]">
             {query
               ? `${visibleProducts.length} résultat${visibleProducts.length === 1 ? '' : 's'} trouvé${visibleProducts.length === 1 ? '' : 's'}.`
-              : `${products.length} pièces douillettes — peignoirs, pyjamas polaires et ensembles d'hiver. Filtrez par famille, ouvrez la fiche, commandez sur WhatsApp.`}
+              : `${products.length} pièces douillettes — peignoirs, pyjamas polaires et ensembles d'hiver. Filtrez par famille, ouvrez la fiche, commandez en ligne en 2 minutes.`}
           </p>
         </header>
       </ScrollReveal>

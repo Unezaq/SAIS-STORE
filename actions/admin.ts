@@ -4,11 +4,22 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import { createOrder, deleteProduct, getProduct, getSettings, updateOrderStatus, updateSettings, upsertProduct } from '@/lib/store'
-import { getAuthenticatedUser, requireAdmin } from '@/lib/supabase/auth'
+import {
+  deleteProduct,
+  deleteCoupon,
+  toggleCoupon,
+  upsertCoupon,
+  updateOrderStatus,
+  upsertProduct,
+  updateSettings,
+} from '@/lib/store'
+import {
+  AUTH_PROVIDERS_DISABLED_MESSAGE,
+  isAuthProviderDisabled,
+  requireAdmin,
+} from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
-import type { StoreOrder, StoreSettings } from '@/lib/types/store'
-import { getStorePrice } from '@/lib/pricing'
+import type { StoreSettings } from '@/lib/types/store'
 
 const emailSchema = z.email()
 const imageUrlSchema = z.string().min(1).max(2048).refine(
@@ -37,22 +48,8 @@ const productSchema = z.object({
   ref: z.string().trim().max(80).optional(),
   description: z.string().trim().max(4000).optional(),
 })
-const orderItemsSchema = z.array(z.object({
-  slug: z.string().trim().min(1).max(128),
-  color: z.string().trim().max(80).optional(),
-  size: z.string().trim().max(16).optional(),
-  quantity: z.number().int().min(1).max(99),
-})).min(1).max(20)
 const orderStatusSchema = z.enum(['en_attente', 'confirmee', 'expediee', 'livree', 'annulee'])
 type ActionResult = { ok: true } | { ok: false; error: string }
-type CreateClientOrderResult =
-  | {
-      ok: true
-      orderId: string
-      total: number
-      items: Array<StoreOrder['items'][number] & { imageUrl: string }>
-    }
-  | { ok: false; error: string }
 const dateInputSchema = z.string().refine((value) => {
   if (!value) return true
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
@@ -124,6 +121,9 @@ export async function loginAction(formData: FormData) {
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword(credentials.data)
   if (error) {
+    if (isAuthProviderDisabled(error.code)) {
+      return { ok: false, error: AUTH_PROVIDERS_DISABLED_MESSAGE }
+    }
     return { ok: false, error: 'Email ou mot de passe incorrect.' }
   }
   if (data.user?.app_metadata?.role !== 'admin') {
@@ -236,88 +236,69 @@ export async function saveSettingsAction(
   return { ok: true }
 }
 
-export async function createClientOrderAction(
-  formData: FormData
-): Promise<CreateClientOrderResult> {
-  const parsed = z.object({
-    customerName: z.string().trim().min(1).max(160),
-    phone: z.string().trim().regex(/^\+?[\d\s()-]{9,18}$/),
-    address: z.string().trim().min(1).max(500),
-    clientEmail: emailSchema.optional(),
-    note: z.string().trim().max(1000).optional(),
-  }).safeParse({
-    customerName: formString(formData, 'customerName'),
-    phone: formString(formData, 'phone'),
-    address: formString(formData, 'address'),
-    clientEmail: formString(formData, 'clientEmail') || undefined,
-    note: formString(formData, 'note') || undefined,
+const couponSchema = z.object({
+  code: z.string().trim().min(3).max(32).toLowerCase(),
+  type: z.enum(['percentage', 'fixed']),
+  value: z.number().int().min(1).max(1000000),
+  minOrder: z.number().int().min(0).max(1000000),
+  expiresAt: dateInputSchema.optional(),
+  maxUses: z.number().int().min(1).optional(),
+  perUserLimit: z.number().int().min(1).optional(),
+  isActive: z.boolean().default(true),
+})
+
+export async function saveCouponAction(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = couponSchema.safeParse({
+    code: formString(formData, 'code'),
+    type: formString(formData, 'type') as 'percentage' | 'fixed',
+    value: Number(formString(formData, 'value')),
+    minOrder: Number(formString(formData, 'minOrder') || '0'),
+    expiresAt: formString(formData, 'expiresAt') || undefined,
+    maxUses: formString(formData, 'maxUses')
+      ? Number(formString(formData, 'maxUses'))
+      : undefined,
+    perUserLimit: formString(formData, 'perUserLimit')
+      ? Number(formString(formData, 'perUserLimit'))
+      : undefined,
+    isActive: formString(formData, 'isActive') === 'true',
   })
   if (!parsed.success) return invalidInput()
 
-  const rawItems = parseJsonField(formString(formData, 'items'))
-  const items = orderItemsSchema.safeParse(rawItems)
-  if (!items.success) return invalidInput()
+  await upsertCoupon(parsed.data)
+  revalidatePath('/admin/coupons')
+  revalidatePath('/')
+  return { ok: true }
+}
 
-  const authenticatedUser = await getAuthenticatedUser()
-  const [settings, products] = await Promise.all([
-    getSettings(),
-    Promise.all(items.data.map((item) => getProduct(item.slug))),
-  ])
-  if (products.some((product) => !product)) {
-    return { ok: false, error: 'Un produit de cette commande n’est plus disponible.' }
-  }
-
-  const invalidVariant = items.data.some((item, index) => {
-    const product = products[index]
-    if (!product) return true
-    return (
-      (item.size && product.sizes?.length && !product.sizes.includes(item.size)) ||
-      (item.color && product.colors?.length && !product.colors.some((color) => color.name === item.color))
-    )
+export async function deleteCouponActionAdmin(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = z.object({ id: z.string().trim().min(1).max(128) }).safeParse({
+    id: formString(formData, 'id'),
   })
-  if (invalidVariant) return invalidInput()
+  if (!parsed.success) return invalidInput()
 
-  const orderItems: StoreOrder['items'] = []
-  const confirmationItems: Array<StoreOrder['items'][number] & { imageUrl: string }> = []
-  for (const [index, item] of items.data.entries()) {
-    const product = products[index]
-    if (!product) return invalidInput()
-    const confirmedItem = {
-      slug: product.slug,
-      title: product.title,
-      color: item.color,
-      size: item.size,
-      quantity: item.quantity,
-      price: getStorePrice(product, settings),
-    }
-    orderItems.push(confirmedItem)
-    confirmationItems.push({ ...confirmedItem, imageUrl: product.imageUrl })
-  }
-  const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const totalItems = orderItems.reduce((sum, item) => sum + item.quantity, 0)
-  const deliveryFee =
-    settings.freeDeliveryMinItems > 0 && totalItems >= settings.freeDeliveryMinItems
-      ? 0
-      : settings.deliveryFee
-  const total = subtotal + deliveryFee
-  const clientEmail = authenticatedUser?.email?.toLowerCase() ?? parsed.data.clientEmail
+  await deleteCoupon(parsed.data.id)
+  revalidatePath('/admin/coupons')
+  revalidatePath('/')
+  return { ok: true }
+}
 
-  const order = await createOrder({
-    clientEmail,
-    clientName: parsed.data.customerName,
-    customerName: parsed.data.customerName,
-    phone: parsed.data.phone,
-    address: parsed.data.address,
-    items: orderItems,
-    subtotal,
-    deliveryFee,
-    total,
-    status: 'en_attente',
-    note: parsed.data.note,
-  }, authenticatedUser?.id ?? null)
+export async function toggleCouponActionAdmin(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = z
+    .object({
+      id: z.string().trim().min(1).max(128),
+      isActive: z.string().transform((val) => val === 'true'),
+    })
+    .safeParse({
+      id: formString(formData, 'id'),
+      isActive: formString(formData, 'isActive'),
+    })
+  if (!parsed.success) return invalidInput()
 
-  revalidatePath('/admin/orders')
-  revalidatePath('/admin/clients')
-  revalidatePath('/account')
-  return { ok: true, orderId: order.id, total: order.total, items: confirmationItems }
+  await toggleCoupon(parsed.data.id, parsed.data.isActive)
+  revalidatePath('/admin/coupons')
+  revalidatePath('/')
+  return { ok: true }
 }

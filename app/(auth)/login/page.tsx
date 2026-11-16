@@ -6,9 +6,9 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
-import { loginAction as clientLogin } from '@/actions/client'
+import { loginCustomerAction } from '@/actions/customer-auth'
 
-export default function ClientLoginPage() {
+export default function LoginPage() {
   const router = useRouter()
   const { success, error: showError } = useToast()
   const [pending, setPending] = useState(false)
@@ -18,18 +18,13 @@ export default function ClientLoginPage() {
     setPending(true)
     try {
       const formData = new FormData(e.currentTarget)
-      const result = await clientLogin(formData)
-      if (result?.ok) {
-        success(
-          'Connexion réussie',
-          result.isBootstrapAdmin
-            ? 'Bienvenue dans votre espace administrateur.'
-            : 'Bienvenue sur votre compte SAIS.'
-        )
-        router.push(result.isBootstrapAdmin ? '/admin' : '/account')
+      const result = await loginCustomerAction(formData)
+      if (result.ok) {
+        success('Connexion réussie', 'Bienvenue sur votre compte SAIS.')
+        router.push('/account')
         return
       }
-      showError('Échec de la connexion', result?.error ?? 'Téléphone/email ou mot de passe incorrect.')
+      showError('Échec de la connexion', result.error ?? 'Téléphone/email ou mot de passe incorrect.')
     } catch {
       showError('Échec de la connexion', 'Vérifiez votre connexion et réessayez.')
     } finally {
@@ -43,14 +38,14 @@ export default function ClientLoginPage() {
         <p className="text-eyebrow uppercase text-text-muted">SAIS Store</p>
         <h1 className="mt-fib-1 text-title text-ink">Connexion client</h1>
         <p className="mt-fib-1 text-sm text-text-muted">
-          Accédez à votre compte et suivez vos commandes.
+          Accédez à votre compte avec votre téléphone ou email et votre mot de passe.
         </p>
         <form onSubmit={handleSubmit} className="mt-fib-3 flex flex-col gap-fib-2">
           <Input
             label="Téléphone ou email"
             name="identifier"
             type="text"
-            placeholder="06 12 34 56 78"
+            placeholder="06 12 34 56 78 ou vous@exemple.ma"
             autoComplete="username"
             required
             autoFocus

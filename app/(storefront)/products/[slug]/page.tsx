@@ -22,7 +22,7 @@ export async function generateMetadata({
 
   if (!product) return { title: 'Pièce introuvable' }
 
-  const description = `${product.description ?? ''} Livraison 24–48h partout au Maroc, paiement à la livraison. Commande sur WhatsApp.`
+  const description = `${product.description ?? ''} Livraison 24–48h partout au Maroc, paiement à la livraison. Commande en ligne, paiement à la livraison.`
   const onSale = product.originalPrice && product.originalPrice > product.price
 
   return {

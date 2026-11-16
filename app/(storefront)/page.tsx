@@ -24,7 +24,7 @@ export default async function StorefrontHomePage() {
         : '24–48h partout au Maroc',
     },
     { label: 'Paiement à la livraison', detail: 'En espèces, à réception' },
-    { label: 'Commande WhatsApp', detail: 'Confirmation en minutes' },
+    { label: 'Commande en ligne', detail: '2 minutes, sans compte' },
   ]
 
   const whatsappUrl = `https://wa.me/${settings.whatsappPhone}?text=${encodeURIComponent(

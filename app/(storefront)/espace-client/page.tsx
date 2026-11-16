@@ -17,7 +17,7 @@ import { getSettings } from '@/lib/products'
 export const metadata: Metadata = {
   title: 'Espace client — Commander, suivre et nous contacter',
   description:
-    'Comment commander chez SAIS Store en 4 étapes simples : choisissez, envoyez sur WhatsApp, confirmez votre adresse, recevez en 24–48h avec paiement à la livraison. Contact et suivi inclus.',
+    'Comment commander chez SAIS Store en 4 étapes simples : choisissez vos pièces, validez votre panier, confirmez par téléphone, recevez en 24–48h avec paiement à la livraison. Suivi en ligne inclus.',
   alternates: { canonical: '/espace-client' },
 }
 
@@ -25,19 +25,20 @@ const steps = [
   {
     icon: ShoppingBag,
     title: 'Choisissez vos pièces',
-    body: 'Parcourez la boutique ou les promotions, ouvrez la fiche de la pièce et gardez sa référence en tête.',
+    body: 'Parcourez la boutique, choisissez votre taille et votre coloris, puis ajoutez vos pièces au panier.',
     action: { label: 'Aller à la boutique', href: '/boutique' },
   },
   {
-    icon: MessageCircle,
-    title: 'Envoyez la commande sur WhatsApp',
-    body: 'Un message suffit : la référence de la pièce, la taille et la quantité. Aucun compte à créer.',
-    action: { label: 'Écrire sur WhatsApp', href: undefined, external: true },
+    icon: ClipboardCheck,
+    title: 'Validez votre commande',
+    body: 'Nom, téléphone et adresse en deux étapes, avec une confirmation claire avant l’envoi. Aucun compte à créer.',
+    action: { label: 'Finaliser ma commande', href: '/checkout' },
   },
   {
-    icon: ClipboardCheck,
-    title: 'Confirmez votre adresse',
-    body: 'Une conseillère valide votre commande : nom, téléphone et adresse de livraison. Vous recevez la confirmation en quelques minutes.',
+    icon: MessageCircle,
+    title: 'Confirmez avec nous',
+    body: 'Nous vous appelons pour vérifier l’adresse. Votre référence SAIS-… reste disponible pour suivre la commande à tout moment.',
+    action: { label: 'Suivre ma commande', href: '/suivre' },
   },
   {
     icon: Truck,
@@ -50,7 +51,7 @@ const faqs = [
   {
     question: 'Comment passer une commande ?',
     answer:
-      "Choisissez vos pièces dans la boutique, puis envoyez leurs références sur WhatsApp. Une conseillère confirme votre commande en quelques minutes — aucun compte n'est nécessaire.",
+      "Choisissez vos pièces, ajoutez-les au panier et validez vos coordonnées en deux étapes. Vous recevez immédiatement une référence SAIS-… puis nous vous appelons pour confirmer. Aucun compte n'est nécessaire.",
   },
   {
     question: 'Combien coûte la livraison et sous quel délai ?',
@@ -70,7 +71,7 @@ const faqs = [
   {
     question: 'Comment suivre ma commande ?',
     answer:
-      'Rendez-vous sur la page « Suivre ma commande » et saisissez le numéro de téléphone utilisé lors de la commande : une conseillère vous répond avec le statut.',
+      'Ouvrez la page « Suivre ma commande », saisissez le téléphone utilisé et la référence SAIS-… reçue à la commande : le statut et le récapitulatif s’affichent immédiatement.',
   },
   {
     question: 'Quels sont vos horaires ?',
@@ -137,8 +138,6 @@ export default async function EspaceClientPage() {
                     {step.action && (
                       <Link
                         href={step.action.href ?? whatsappOrderLink}
-                        target={step.action.external ? '_blank' : undefined}
-                        rel={step.action.external ? 'noreferrer' : undefined}
                         className="press mt-fib-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-ink px-fib-2 py-fib-1 text-[13px] font-medium text-white transition-colors hover:bg-ink/90"
                       >
                         {step.action.label}
@@ -234,7 +233,7 @@ export default async function EspaceClientPage() {
       <section className="mx-auto w-full max-w-7xl px-fib-3 md:px-fib-4">
         <ScrollReveal variant="fade-up" delay={0.05}>
           <Link
-            href="/account"
+            href="/suivre"
             className="group flex items-center justify-between gap-fib-3 rounded-[24px] bg-surface-soft p-fib-4 transition-colors hover:bg-ink/[0.04] md:p-fib-4"
           >
             <div className="flex items-center gap-fib-3">
@@ -244,8 +243,8 @@ export default async function EspaceClientPage() {
               <div>
                 <h2 className="text-heading text-ink">Suivre ma commande</h2>
                 <p className="mt-0.5 text-sm text-text-muted">
-                  Saisissez votre numéro de téléphone, une conseillère vous donne le
-                  statut de la livraison.
+                  Avec votre téléphone et votre référence SAIS-…, le statut et le
+                  récapitulatif s’affichent immédiatement.
                 </p>
               </div>
             </div>

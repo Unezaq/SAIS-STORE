@@ -3,9 +3,15 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { normalizeMoroccanPhone, phoneAuthEmail } from '@/lib/phone'
 import { ensureClientProfile, updateClientProfileByAuthUserId } from '@/lib/store'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { bootstrapConfiguredAdmin } from '@/lib/supabase/bootstrap-admin'
-import { getAuthenticatedUser } from '@/lib/supabase/auth'
+import {
+  AUTH_PROVIDERS_DISABLED_MESSAGE,
+  getAuthenticatedUser,
+  isAuthProviderDisabled,
+} from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
 
 function formString(formData: FormData, key: string): string {
@@ -17,26 +23,12 @@ function invalidInput(): { ok: false; error: string } {
   return { ok: false, error: 'Veuillez vérifier les informations saisies.' }
 }
 
-function normalizeMoroccanPhone(value: string): string | null {
-  const compact = value.replace(/[\s().-]/g, '')
-  const digits = compact.startsWith('+')
-    ? compact.slice(1)
-    : compact.startsWith('00')
-      ? compact.slice(2)
-      : compact
-  const nationalNumber = digits.startsWith('212') ? digits.slice(3) : digits
-  const localNumber = nationalNumber.startsWith('0')
-    ? nationalNumber.slice(1)
-    : nationalNumber
-
-  return /^[5-7]\d{8}$/.test(localNumber) ? `+212${localNumber}` : null
-}
-
 function signupErrorMessage(code: string | undefined): string {
   switch (code) {
     case 'user_already_exists':
     case 'phone_exists':
-      return 'Un compte utilise déjà ce numéro. Connectez-vous ou utilisez un autre numéro.'
+    case 'email_exists':
+      return 'Un compte utilise déjà ce numéro ou cet email. Connectez-vous ou utilisez une autre adresse.'
     case 'weak_password':
       return 'Le mot de passe est trop faible. Choisissez un mot de passe plus robuste.'
     case 'over_email_send_rate_limit':
@@ -44,15 +36,48 @@ function signupErrorMessage(code: string | undefined): string {
     case 'over_phone_send_rate_limit':
       return 'Trop de tentatives. Attendez quelques minutes avant de réessayer.'
     case 'signup_disabled':
-      return 'Les inscriptions sont actuellement désactivées. Contactez SAIS.'
+      return 'Les inscriptions sont actuellement désactivées dans Supabase. Contactez SAIS.'
+    case 'email_address_invalid':
+      return 'Impossible de créer le compte : vérifiez l’adresse email saisie.'
+    case 'email_provider_disabled':
     case 'phone_provider_disabled':
-      return 'La création de comptes par téléphone est désactivée. Contactez SAIS.'
+      return 'La création de comptes est désactivée dans Supabase (Authentication → Sign In / Providers). Contactez SAIS.'
     case 'phone_not_allowed':
     case 'invalid_phone':
       return 'Saisissez un numéro de téléphone marocain valide.'
     default:
       return 'Impossible de créer ce compte. Vérifiez les informations ou connectez-vous.'
   }
+}
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
+
+/**
+ * Accepts an email or a Moroccan phone. Phone-first accounts are stored under
+ * an internal email, so we try that identity first and keep the legacy phone
+ * identity as a fallback.
+ */
+async function signInWithIdentifier(
+  supabase: SupabaseServerClient,
+  identifier: string,
+  password: string
+) {
+  if (identifier.includes('@')) {
+    const email = identifier.toLowerCase()
+    if (!z.email().safeParse(email).success) return null
+    return supabase.auth.signInWithPassword({ email, password })
+  }
+
+  const phone = normalizeMoroccanPhone(identifier)
+  if (!phone) return null
+
+  const byPhoneEmail = await supabase.auth.signInWithPassword({
+    email: phoneAuthEmail(phone),
+    password,
+  })
+  if (!byPhoneEmail.error) return byPhoneEmail
+
+  return supabase.auth.signInWithPassword({ phone, password })
 }
 
 export async function loginAction(formData: FormData) {
@@ -66,20 +91,16 @@ export async function loginAction(formData: FormData) {
   if (!parsed.success) return invalidInput()
 
   const { identifier, password } = parsed.data
-  let credentials: { email: string; password: string } | { phone: string; password: string } | null
-  if (identifier.includes('@')) {
-    const email = identifier.toLowerCase()
-    credentials = z.email().safeParse(email).success ? { email, password } : null
-  } else {
-    const phone = normalizeMoroccanPhone(identifier)
-    credentials = phone ? { phone, password } : null
-  }
-  if (!credentials) return invalidInput()
-
   const supabase = await createClient()
-  const { data, error } = await supabase.auth.signInWithPassword(credentials)
-  if (error) return { ok: false, error: 'Email ou mot de passe incorrect.' }
+  const authResult = await signInWithIdentifier(supabase, identifier, password)
+  if (!authResult || authResult.error) {
+    if (isAuthProviderDisabled(authResult?.error?.code)) {
+      return { ok: false, error: AUTH_PROVIDERS_DISABLED_MESSAGE }
+    }
+    return { ok: false, error: 'Email, téléphone ou mot de passe incorrect.' }
+  }
 
+  const data = authResult.data
   const isBootstrapAdmin = data.user
     ? await bootstrapConfiguredAdmin(data.user.id)
     : false
@@ -149,47 +170,74 @@ export async function registerClientAction(formData: FormData) {
   if (!parsed.success) return invalidInput()
 
   const supabase = await createClient()
-  const { data, error } = await supabase.auth.signUp({
-    phone: parsed.data.phone,
+  // Phone-first store: creating an account never depends on an SMS provider
+  // and never waits for an email confirmation. The account is created through
+  // the admin API as already confirmed, then signed in to set the session.
+  // Without a real email, it uses an internal address derived from the phone;
+  // the customer still signs in with the phone number.
+  const authEmail = parsed.data.email || phoneAuthEmail(parsed.data.phone)
+  const admin = createAdminClient()
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email: authEmail,
     password: parsed.data.password,
-    options: {
-      data: {
-        first_name: parsed.data.firstName,
-        last_name: parsed.data.lastName,
-        phone: parsed.data.phone,
-        address: parsed.data.address,
-        contact_email: parsed.data.email || null,
-      },
+    email_confirm: true,
+    user_metadata: {
+      first_name: parsed.data.firstName,
+      last_name: parsed.data.lastName,
+      phone: parsed.data.phone,
+      address: parsed.data.address,
+      contact_email: parsed.data.email || null,
     },
   })
 
-  if (error) {
-    console.error('Supabase customer signup failed.', {
-      code: error.code ?? 'unknown',
-      status: error.status,
+  if (createError) {
+    console.error('Supabase customer creation failed.', {
+      code: createError.code ?? 'unknown',
+      status: createError.status,
     })
-    return { ok: false, error: signupErrorMessage(error.code) }
-  }
-  if (!data.user || data.user.identities?.length === 0) {
-    return { ok: false, error: 'Un compte avec ce numéro existe peut-être déjà.' }
+    return { ok: false, error: signupErrorMessage(createError.code) }
   }
 
-  if (!data.session) {
+  const newUser = created.user
+  if (!newUser) {
+    return { ok: false, error: 'Impossible de créer ce compte. Réessayez ou contactez SAIS.' }
+  }
+
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: authEmail,
+    password: parsed.data.password,
+  })
+  if (signInError) {
+    console.error('New customer could not be signed in.', signInError)
+
+    if (isAuthProviderDisabled(signInError.code)) {
+      // Sign-in is switched off in Supabase: remove the orphan account so the
+      // customer can register again once the provider is enabled.
+      const { error: rollbackError } = await admin.auth.admin.deleteUser(newUser.id)
+      if (rollbackError) console.error('Could not roll back the new account.', rollbackError)
+      return { ok: false, error: AUTH_PROVIDERS_DISABLED_MESSAGE }
+    }
+
     return {
       ok: false,
-      error: 'La confirmation du téléphone est activée dans Supabase. Désactivez-la pour permettre une inscription sans vérification.',
+      error:
+        'Votre compte a été créé, mais la connexion automatique a échoué. Connectez-vous avec votre téléphone et votre mot de passe.',
     }
   }
 
   try {
-    await ensureClientProfile({
-      authUserId: data.user.id,
-      email: parsed.data.email || null,
-      firstName: parsed.data.firstName,
-      lastName: parsed.data.lastName,
-      phone: parsed.data.phone,
-      address: parsed.data.address,
-    })
+    await ensureClientProfile(
+      {
+        authUserId: newUser.id,
+        email: parsed.data.email || null,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        phone: parsed.data.phone,
+        address: parsed.data.address,
+      },
+      // Link the guest orders placed earlier with this phone or email.
+      { allowEmailBasedLinking: true }
+    )
   } catch (profileError) {
     console.error('Failed to save customer profile after signup.', profileError)
     return {
@@ -197,7 +245,7 @@ export async function registerClientAction(formData: FormData) {
       error: 'Votre compte a été créé, mais son profil n’a pas pu être enregistré. Contactez SAIS pour finaliser le compte.',
     }
   }
-  const isBootstrapAdmin = await bootstrapConfiguredAdmin(data.user.id)
+  const isBootstrapAdmin = await bootstrapConfiguredAdmin(newUser.id)
   if (isBootstrapAdmin) {
     const { error: refreshError } = await supabase.auth.refreshSession()
     if (refreshError) throw refreshError
