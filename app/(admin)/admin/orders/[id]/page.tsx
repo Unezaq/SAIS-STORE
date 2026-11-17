@@ -7,7 +7,7 @@ import { OrderTimeline } from '@/components/storefront/OrderTimeline'
 import { getSettings } from '@/lib/products'
 import { orderReference } from '@/lib/orderStatus'
 import { formatMoroccanPhone, whatsappNumber } from '@/lib/phone'
-import { getOrderById, getOrderByToken } from '@/lib/store'
+import { getOrderById } from '@/lib/store'
 import { formatMAD } from '@/lib/utils'
 
 export default async function AdminOrderPage({

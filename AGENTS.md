@@ -135,14 +135,18 @@ See `docs/knowledge/` for detailed cheat sheets:
 
 ## Commands
 ```bash
-pnpm dev          # Development server
-pnpm build        # Production build
-pnpm start        # Production server
-pnpm lint         # ESLint
-pnpm db:gen       # Generate Supabase types
-pnpm db:push      # Push migrations
-pnpm db:reset     # Reset local DB
+pnpm dev                                # Development server (Webpack, Serwist off)
+pnpm build                              # Production build (Webpack — Serwist requires it)
+pnpm start                              # Production server
+pnpm test                               # Vitest suite (vitest run)
+pnpm exec vitest run                    # same, if npx is blocked by devEngines
+pnpm db:seed-products -- --confirm      # Upsert catalogue from data/store.json
 ```
+
+There is **no** `lint`, `db:gen`, `db:push` or `db:reset` script. `eslint` cannot run on
+TypeScript 7.0 (typescript-eslint refuses it), so `pnpm build` is the type check. Migrations in
+`supabase/migrations/` are applied manually in the Supabase SQL Editor; never edit an applied
+migration — add a new dated file instead.
 
 
 <!-- BEGIN:nextjs-agent-rules -->
