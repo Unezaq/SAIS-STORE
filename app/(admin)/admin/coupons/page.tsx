@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { Plus, Pencil, Trash2, ToggleRight, ToggleLeft } from 'lucide-react'
-import { getCoupons, deleteCoupon, toggleCoupon, upsertCoupon } from '@/lib/products'
-import { formatMAD, cn } from '@/lib/utils'
+import { deleteCouponActionAdmin, toggleCouponActionAdmin } from '@/actions/admin'
+import { getCoupons } from '@/lib/products'
+import { formatMAD } from '@/lib/utils'
 
 export default async function AdminCouponsPage() {
   const coupons = await getCoupons()
@@ -65,12 +66,20 @@ export default async function AdminCouponsPage() {
                     {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('fr-MA') : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <form action={toggleCouponAction}>
+                    <form
+                      action={async (formData: FormData) => {
+                        await toggleCouponActionAdmin(formData)
+                      }}
+                    >
                       <input type="hidden" name="id" value={c.id} />
                       <input type="hidden" name="isActive" value={String(!c.isActive)} />
                       <button
                         type="submit"
-                        className={`press inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-colors border px-3 py-1 text-[11px] font-medium ${c.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'}`}
+                        className={`press inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
+                          c.isActive
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                        }`}
                       >
                         {c.isActive ? (
                           <span className="flex items-center gap-1.5">
@@ -95,7 +104,11 @@ export default async function AdminCouponsPage() {
                       >
                         <Pencil size={15} />
                       </Link>
-                      <form action={deleteCouponAction}>
+                      <form
+                        action={async (formData: FormData) => {
+                          await deleteCouponActionAdmin(formData)
+                        }}
+                      >
                         <input type="hidden" name="id" value={c.id} />
                         <button
                           type="submit"
@@ -116,21 +129,3 @@ export default async function AdminCouponsPage() {
     </div>
   )
 }
-
-async function toggleCouponAction(formData: FormData) {
-  'use server'
-  const { toggleCoupon } = await import('@/lib/products')
-  const { revalidatePath } = await import('next/cache')
-  await toggleCoupon(String(formData.get('id')), formData.get('isActive') === 'true')
-  revalidatePath('/admin/coupons')
-}
-
-async function deleteCouponAction(formData: FormData) {
-  'use server'
-  const { deleteCoupon } = await import('@/lib/products')
-  const { revalidatePath } = await import('next/cache')
-  await deleteCoupon(String(formData.get('id')))
-  revalidatePath('/admin/coupons')
-}
-
-

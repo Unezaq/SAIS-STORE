@@ -18,8 +18,10 @@ function invalidInput(): { ok: false; error: string } {
 }
 
 const updateProfileSchema = z.object({
-  fullName: z.string().trim().min(1, 'Nom complet requis').max(160),
-  city: z.string().trim().min(1, 'Ville requise').max(100),
+  fullName: z.string().trim().max(160).optional(),
+  firstName: z.string().trim().max(80).optional(),
+  lastName: z.string().trim().max(160).optional(),
+  city: z.string().trim().max(100).optional(),
   address: z.string().trim().min(1, 'Adresse requise').max(500),
   email: z.string().email('Email invalide').toLowerCase().trim().max(254).optional(),
   phone: z.string().min(1, 'Téléphone requis'),
@@ -39,6 +41,8 @@ export async function updateCustomerProfileAction(
 
   const parsed = updateProfileSchema.safeParse({
     fullName: formString(formData, 'fullName'),
+    firstName: formString(formData, 'firstName'),
+    lastName: formString(formData, 'lastName'),
     city: formString(formData, 'city'),
     address: formString(formData, 'address'),
     email: formString(formData, 'email') || undefined,
@@ -49,7 +53,26 @@ export async function updateCustomerProfileAction(
     return invalidInput()
   }
 
-  const { fullName, city, address, email, phone } = parsed.data
+  // Two forms feed this action: /account/profile sends `fullName` + `city`,
+  // while /account sends `firstName` + `lastName` and no city. Accept both and
+  // keep the stored city when the form does not carry one.
+  const fullName =
+    parsed.data.fullName?.trim() ||
+    [parsed.data.firstName, parsed.data.lastName]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+  if (!fullName) {
+    return invalidInput()
+  }
+
+  const city = parsed.data.city?.trim() || customer.city?.trim()
+  if (!city) {
+    return invalidInput()
+  }
+
+  const { address, email, phone } = parsed.data
 
   const normalizedPhone = normalizeMoroccanPhone(phone)
   if (!normalizedPhone) {

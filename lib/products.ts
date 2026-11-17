@@ -17,6 +17,7 @@ export {
   getOrderByToken,
   getOrderDetail,
   getClients,
+  getAdminClients,
   getClientByAuthUserId,
   ensureClientProfile,
   createOrder,

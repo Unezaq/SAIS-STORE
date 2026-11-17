@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { updateOrderStatusAction } from '@/actions/admin'
 
@@ -15,6 +16,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function OrderStatusSelect({ orderId, currentStatus }: { orderId: string; currentStatus: string }) {
   const [pending, setPending] = useState(false)
   const [status, setStatus] = useState(currentStatus)
+  const router = useRouter()
   const { success, error: showError } = useToast()
 
   async function handleStatusChange(formData: FormData) {
@@ -26,7 +28,8 @@ export function OrderStatusSelect({ orderId, currentStatus }: { orderId: string;
         showError('Échec de la mise à jour', result.error)
         return
       }
-      success('Statut mis à jour', 'Le client sera informé par WhatsApp.')
+      success('Statut mis à jour', 'Le client verra le nouveau statut sur sa page de suivi.')
+      router.refresh()
     } catch {
       setStatus(currentStatus)
       showError('Échec de la mise à jour', 'Réessayez plus tard.')

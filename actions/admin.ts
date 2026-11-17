@@ -204,6 +204,7 @@ export async function updateOrderStatusAction(formData: FormData): Promise<Actio
 
   await updateOrderStatus(parsed.data.id, parsed.data.status)
   revalidatePath('/admin/orders')
+  revalidatePath(`/admin/orders/${parsed.data.id}`)
   return { ok: true }
 }
 
@@ -237,6 +238,7 @@ export async function saveSettingsAction(
 }
 
 const couponSchema = z.object({
+  id: z.string().trim().min(1).max(128).optional(),
   code: z.string().trim().min(3).max(32).toLowerCase(),
   type: z.enum(['percentage', 'fixed']),
   value: z.number().int().min(1).max(1000000),
@@ -250,6 +252,7 @@ const couponSchema = z.object({
 export async function saveCouponAction(formData: FormData): Promise<ActionResult> {
   await requireAdmin()
   const parsed = couponSchema.safeParse({
+    id: formString(formData, 'id') || undefined,
     code: formString(formData, 'code'),
     type: formString(formData, 'type') as 'percentage' | 'fixed',
     value: Number(formString(formData, 'value')),

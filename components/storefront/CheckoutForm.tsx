@@ -32,6 +32,17 @@ const fieldClassName =
   'w-full rounded-xl border border-hairline bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
 const labelClassName = 'grid gap-1.5 text-sm font-medium text-ink'
 
+/**
+ * One key per review session: a retry after a network timeout reuses it, so
+ * place_order_rpc returns the order it already created instead of duplicating.
+ */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export function CheckoutForm({
   settings,
   profile,
@@ -54,6 +65,7 @@ export function CheckoutForm({
   const [confirmed, setConfirmed] = React.useState(false)
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [idempotencyKey, setIdempotencyKey] = React.useState('')
   const [confirmation, setConfirmation] = React.useState<Confirmation | null>(null)
 
   function handleDetails(event: React.FormEvent<HTMLFormElement>) {
@@ -81,6 +93,7 @@ export function CheckoutForm({
       note: String(formData.get('note') ?? '').trim(),
     })
     setConfirmed(false)
+    setIdempotencyKey(newIdempotencyKey())
     setStep('review')
     window.scrollTo({ top: 0 })
   }
@@ -104,6 +117,7 @@ export function CheckoutForm({
     formData.set('couponCode', details.couponCode)
     formData.set('note', details.note)
     formData.set('confirmInfo', 'on')
+    formData.set('idempotencyKey', idempotencyKey)
     formData.set(
       'items',
       JSON.stringify(

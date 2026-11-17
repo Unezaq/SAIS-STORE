@@ -187,18 +187,6 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
     return { ok: false, error: 'Une taille ou un coloris n’est plus disponible. Vérifiez votre panier.' }
   }
 
-  // Validate coupon server-side if provided
-  let couponCode: string | undefined
-  let discountTotal = 0
-  if (parsed.data.couponCode) {
-    const validation = await validateCoupon(parsed.data.couponCode, 0) // subtotal computed in RPC
-    if (!validation.valid) {
-      return { ok: false, error: validation.message }
-    }
-    couponCode = parsed.data.couponCode
-    discountTotal = validation.discountAmount
-  }
-
   const orderItems: StoreOrder['items'] = []
   const confirmationItems: PlacedOrderItem[] = []
   for (const [index, item] of items.data.entries()) {
@@ -220,6 +208,21 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
 
   const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const totalItems = orderItems.reduce((sum, item) => sum + item.quantity, 0)
+
+  // Validate the coupon against the real basket subtotal: a code with a
+  // minimum order amount must be accepted when the basket qualifies. The RPC
+  // revalidates authoritatively before writing the order.
+  let couponCode: string | undefined
+  let discountTotal = 0
+  if (parsed.data.couponCode) {
+    const validation = await validateCoupon(parsed.data.couponCode, subtotal)
+    if (!validation.valid) {
+      return { ok: false, error: validation.message }
+    }
+    couponCode = parsed.data.couponCode
+    discountTotal = validation.discountAmount
+  }
+
   const deliveryFee =
     settings.freeDeliveryMinItems > 0 && totalItems >= settings.freeDeliveryMinItems
       ? 0

@@ -280,27 +280,44 @@ export async function getOrderForUser(
   return data ? mapOrder(data as OrderRow) : null
 }
 
-/** Get all orders for an authenticated customer (by customer_id). */
+/** Get all orders for an authenticated customer (by customer_id).
+ *
+ * Uses createAdminClient() (service_role) because authorization is
+ * enforced at the application layer: the customerId comes exclusively
+ * from the verified server session, never from the browser.
+ */
 export async function getOrdersByCustomerId(
   customerId: string
 ): Promise<StoreOrder[]> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
     .select('*')
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '42703' && error.message?.includes('customer_id')) {
+      console.error(
+        'Orders are unavailable: apply the customer auth migration adding orders.customer_id.'
+      )
+      return []
+    }
+    throw error
+  }
   return (data ?? []).map((row) => mapOrder(row as OrderRow))
 }
 
-/** A customer may only open an order that belongs to their own account (by customer_id). */
+/** A customer may only open an order that belongs to their own account (by customer_id).
+ *
+ * Uses createAdminClient() (service_role) because authorization is
+ * enforced at the application layer.
+ */
 export async function getOrderForCustomer(
   id: string,
   customerId: string
 ): Promise<StoreOrder | null> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
     .select('*')
@@ -308,20 +325,31 @@ export async function getOrderForCustomer(
     .eq('customer_id', customerId)
     .maybeSingle()
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '42703' && error.message?.includes('customer_id')) {
+      console.error(
+        'Customer order lookup is unavailable: apply the customer auth migration.'
+      )
+      return null
+    }
+    throw error
+  }
   return data ? mapOrder(data as OrderRow) : null
 }
 
 /**
  * Get an order for the current customer, checking both auth_user_id and
  * customer_id for backward compatibility with legacy orders.
+ *
+ * Uses createAdminClient() (service_role) because authorization is
+ * enforced at the application layer.
  */
 export async function getOrderForCustomerOrLegacy(
   id: string,
   customerId: string,
   authUserId: string | null
 ): Promise<StoreOrder | null> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   let query = supabase.from('orders').select('*').eq('id', id)
 
   if (authUserId) {
@@ -332,7 +360,26 @@ export async function getOrderForCustomerOrLegacy(
 
   const { data, error } = await query.maybeSingle()
 
-  if (error) throw error
+  if (error) {
+    if (error.code === '42703' && error.message?.includes('customer_id')) {
+      if (!authUserId) {
+        console.error(
+          'Customer order lookup is unavailable: apply the customer auth migration.'
+        )
+        return null
+      }
+
+      const fallback = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', id)
+        .eq('auth_user_id', authUserId)
+        .maybeSingle()
+      if (fallback.error) throw fallback.error
+      return fallback.data ? mapOrder(fallback.data as OrderRow) : null
+    }
+    throw error
+  }
   return data ? mapOrder(data as OrderRow) : null
 }
 
@@ -348,7 +395,17 @@ export async function getOrderByToken(token: string): Promise<StoreOrder | null>
     .eq('tracking_token', token)
     .maybeSingle()
 
-  if (error) throw error
+  if (error) {
+    // Project without order tracking columns yet: show "lien introuvable"
+    // instead of taking the tracking page down.
+    if (error.code === '42703' && error.message?.includes('tracking_token')) {
+      console.error(
+        'Order tracking is unavailable: apply supabase/migrations/20261115_coupons_order_items.sql.'
+      )
+      return null
+    }
+    throw error
+  }
   return data ? mapOrderWithToken(data as OrderRow) : null
 }
 
@@ -442,10 +499,24 @@ export async function updateOrderStatus(
   id: string,
   status: StoreOrder['status']
 ): Promise<void> {
-  const supabase = await createClient()
+  // Called from actions/admin.ts after requireAdmin(): the service role keeps
+  // RLS on order_status_history out of the way while the audit row is written.
+  const supabase = createAdminClient()
   const { error } = await supabase.from('orders').update({ status }).eq('id', id)
 
   if (error) throw error
+
+  // Audit trail. The status change is authoritative; a project whose
+  // order_status_history table is absent/mismatched must still be usable.
+  const { error: historyError } = await supabase.from('order_status_history').insert({
+    order_id: id,
+    status,
+    note: 'Statut mis à jour depuis l’administration',
+  })
+
+  if (historyError) {
+    console.error('order_status_history insert failed:', historyError)
+  }
 }
 
 export async function createOrder(
@@ -483,14 +554,6 @@ export async function createOrder(
 
   const row = (data ?? [])[0]
   if (!row) throw new Error('Order creation returned no row.')
-
-  // Ensure customer_id is set on the order (RPC may not support p_customer_id yet)
-  if (customerId) {
-    await supabase
-      .from('orders')
-      .update({ customer_id: customerId })
-      .eq('id', row.order_id)
-  }
 
   // Update client stats (guest or authenticated)
   if (authUserId) {
@@ -572,6 +635,105 @@ export async function getClients(): Promise<StoreClient[]> {
 
   if (error) throw error
   return (data ?? []).map((row) => mapClient(row as ClientRow))
+}
+
+export type AdminClientEntry = {
+  id: string
+  kind: 'customer' | 'guest'
+  name: string
+  phone: string
+  email: string | null
+  orderCount: number
+  joinedAt: string
+}
+
+/**
+ * /admin/clients — one list for both identity systems:
+ *   • `customers` rows (cookie-auth accounts, orders.customer_id)
+ *   • guest checkouts recorded in the legacy `clients` table
+ * A guest whose phone already belongs to a registered customer is folded into
+ * that customer instead of appearing twice.
+ */
+export async function getAdminClients(): Promise<AdminClientEntry[]> {
+  const supabase = createAdminClient()
+  const [customersResult, ordersResult, clientsResult] = await Promise.all([
+    supabase
+      .from('customers')
+      .select('id, full_name, phone, email, created_at')
+      .order('created_at', { ascending: false }),
+    supabase.from('orders').select('customer_id, phone'),
+    supabase
+      .from('clients')
+      .select('id, auth_user_id, email, first_name, last_name, phone, order_count, created_at')
+      .order('created_at', { ascending: false }),
+  ])
+
+  if (customersResult.error) throw customersResult.error
+  if (ordersResult.error) throw ordersResult.error
+  if (clientsResult.error) throw clientsResult.error
+
+  const ordersByCustomer = new Map<string, number>()
+  const ordersByPhone = new Map<string, number>()
+  for (const row of (ordersResult.data ?? []) as Array<{
+    customer_id: string | null
+    phone: string | null
+  }>) {
+    if (row.customer_id) {
+      ordersByCustomer.set(row.customer_id, (ordersByCustomer.get(row.customer_id) ?? 0) + 1)
+    }
+    if (row.phone) {
+      ordersByPhone.set(row.phone, (ordersByPhone.get(row.phone) ?? 0) + 1)
+    }
+  }
+
+  const customers = (customersResult.data ?? []) as Array<{
+    id: string
+    full_name: string
+    phone: string
+    email: string | null
+    created_at: string
+  }>
+
+  const customerPhones = new Set(customers.map((customer) => customer.phone))
+
+  const entries: AdminClientEntry[] = customers.map((customer) => ({
+    id: customer.id,
+    kind: 'customer',
+    name: customer.full_name,
+    phone: customer.phone,
+    email: customer.email,
+    orderCount:
+      ordersByCustomer.get(customer.id) ?? ordersByPhone.get(customer.phone) ?? 0,
+    joinedAt: customer.created_at,
+  }))
+
+  const guests = (clientsResult.data ?? []) as Array<{
+    id: string
+    auth_user_id: string | null
+    email: string | null
+    first_name: string
+    last_name: string
+    phone: string
+    order_count: number | null
+    created_at: string
+  }>
+
+  for (const guest of guests) {
+    // Already listed as a registered customer (same phone): skip the duplicate.
+    if (guest.auth_user_id === null && customerPhones.has(guest.phone)) continue
+
+    entries.push({
+      id: guest.id,
+      kind: guest.auth_user_id ? 'customer' : 'guest',
+      name: `${guest.first_name} ${guest.last_name}`.trim(),
+      phone: guest.phone,
+      email: guest.email,
+      orderCount: guest.order_count ?? ordersByPhone.get(guest.phone) ?? 0,
+      joinedAt: guest.created_at,
+    })
+  }
+
+  return entries.sort((a, b) => (a.joinedAt < b.joinedAt ? 1 : -1))
 }
 
 export async function getClientByAuthUserId(userId: string): Promise<StoreClient | null> {
@@ -726,7 +888,37 @@ export const getSettings = cache(async function getSettings(): Promise<StoreSett
     .eq('id', 1)
     .single()
 
-  if (error) throw error
+  if (error) {
+    const optionalDiscountColumns = [
+      'storewide_discount_percent',
+      'discount_start_date',
+      'discount_end_date',
+    ]
+    const missingOptionalDiscountColumn =
+      error.code === '42703' &&
+      optionalDiscountColumns.some((column) =>
+        error.message?.includes(column)
+      )
+
+    if (!missingOptionalDiscountColumn) throw error
+
+    const fallback = await supabase
+      .from('settings')
+      .select(
+        'id, store_name, whatsapp_phone, delivery_text, payment_text, currency, delivery_fee, free_delivery_min_items'
+      )
+      .eq('id', 1)
+      .single()
+
+    if (fallback.error) throw fallback.error
+    return mapSettings({
+      ...fallback.data,
+      storewide_discount_percent: 0,
+      discount_start_date: null,
+      discount_end_date: null,
+    } as SettingsRow)
+  }
+
   return mapSettings(data as SettingsRow)
 })
 
