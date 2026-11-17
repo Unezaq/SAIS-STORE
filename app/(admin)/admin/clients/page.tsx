@@ -1,41 +1,97 @@
-import { getClients } from '@/lib/products'
+import { getAdminClients } from '@/lib/products'
 
-export default async function AdminClientsPage() {
-  const clients = await getClients()
+export default async function AdminClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
+  const { q: rawQuery } = await searchParams
+  const query = (rawQuery ?? '').trim().toLowerCase()
+  const clients = await getAdminClients()
+  const visible = query
+    ? clients.filter((client) =>
+        [client.name, client.phone, client.email ?? '']
+          .join(' ')
+          .toLowerCase()
+          .includes(query)
+      )
+    : clients
+  const registeredCount = clients.filter((client) => client.kind === 'customer').length
 
   return (
     <div className="flex flex-col gap-fib-4">
-      <div>
-        <p className="text-eyebrow uppercase text-text-muted">Base clients</p>
-        <h1 className="mt-fib-1 text-title text-ink">Clients</h1>
-        <p className="mt-fib-1 text-sm text-text-muted">{clients.length} client{clients.length > 1 ? 's' : ''}.</p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-eyebrow uppercase text-text-muted">Base clients</p>
+          <h1 className="mt-fib-1 text-title text-ink">Clients</h1>
+          <p className="mt-fib-1 text-sm text-text-muted">
+            {clients.length} client{clients.length > 1 ? 's' : ''} · {registeredCount} avec compte ·
+            les invités apparaissent après leur première commande.
+          </p>
+        </div>
+        <form className="flex items-end gap-2" action="/admin/clients">
+          <label className="grid gap-1.5 text-sm font-medium text-ink">
+            Rechercher
+            <input
+              name="q"
+              type="search"
+              defaultValue={rawQuery ?? ''}
+              placeholder="Nom, téléphone, email"
+              className="w-56 rounded-xl border border-hairline bg-white px-4 py-2 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+          </label>
+          <button
+            type="submit"
+            className="press h-[38px] rounded-full border border-hairline px-4 text-sm font-medium text-ink hover:bg-surface-soft"
+          >
+            Filtrer
+          </button>
+        </form>
       </div>
 
-      {clients.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="rounded-[20px] bg-white p-fib-4 text-center text-text-muted shadow-sm ring-1 ring-hairline">
-          Aucun client pour le moment. Les comptes apparaissent après leur inscription, et les clients invités après leur première commande.
+          {query
+            ? 'Aucun client ne correspond à cette recherche.'
+            : 'Aucun client pour le moment. Les comptes apparaissent après leur inscription, et les clients invités après leur première commande.'}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-surface-soft text-left text-[11px] uppercase tracking-[0.12em] text-text-muted">
               <tr>
                 <th className="px-4 py-3">Nom</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Téléphone</th>
-                <th className="px-4 py-3">Adresse</th>
+                <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Commandes</th>
                 <th className="px-4 py-3">Inscrit le</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {clients.map((c) => (
-                <tr key={c.id} className="hover:bg-surface-soft/60">
-                  <td className="px-4 py-3 font-medium text-ink">{c.firstName} {c.lastName}</td>
-                  <td className="px-4 py-3 tabular text-text-muted">{c.phone}</td>
-                  <td className="px-4 py-3 text-text-muted">{c.address || '—'}</td>
-                  <td className="px-4 py-3 tabular">{c.orderCount}</td>
+              {visible.map((client) => (
+                <tr key={`${client.kind}-${client.id}`} className="hover:bg-surface-soft/60">
+                  <td className="px-4 py-3 font-medium text-ink">{client.name || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${
+                        client.kind === 'customer'
+                          ? 'bg-primary/10 text-primary ring-primary/15'
+                          : 'bg-surface-soft text-text-muted ring-hairline'
+                      }`}
+                    >
+                      {client.kind === 'customer' ? 'Compte' : 'Invité'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 tabular text-text-muted">
+                    <a href={`tel:${client.phone}`} className="hover:text-ink hover:underline">
+                      {client.phone}
+                    </a>
+                  </td>
+                  <td className="px-4 py-3 text-text-muted">{client.email || '—'}</td>
+                  <td className="px-4 py-3 tabular text-ink">{client.orderCount}</td>
                   <td className="px-4 py-3 text-xs text-text-muted">
-                    {new Date(c.createdAt).toLocaleDateString('fr-MA')}
+                    {new Date(client.joinedAt).toLocaleDateString('fr-MA')}
                   </td>
                 </tr>
               ))}

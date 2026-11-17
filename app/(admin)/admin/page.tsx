@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getProducts, getOrders, getClients } from '@/lib/products'
+import { getProducts, getOrders, getAdminClients } from '@/lib/products'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
 import { orderReference } from '@/lib/orderStatus'
 import { Package, ShoppingCart, Users, TrendingUp } from 'lucide-react'
@@ -9,7 +9,7 @@ export default async function AdminDashboard() {
   const [products, orders, clients] = await Promise.all([
     getProducts(),
     getOrders(),
-    getClients(),
+    getAdminClients(),
   ])
 
   // Cancelled orders never reached the customer, so they are not revenue.
