@@ -402,7 +402,9 @@ create policy "Users read own profile" on public.profiles
   for select to authenticated using (id = auth.uid());
 drop policy if exists "Users update own profile" on public.profiles;
 create policy "Users update own profile" on public.profiles
-  for update to authenticated using (id = auth.uid());
+  for update to authenticated
+  using (id = auth.uid())
+  with check (role <> 'admin' or public.is_admin());
 drop policy if exists "Admin read all profiles" on public.profiles;
 create policy "Admin read all profiles" on public.profiles
   for select to authenticated
@@ -664,6 +666,7 @@ create or replace function public.place_order_rpc(
   p_customer_name text,
   p_phone text,
   p_address text,
+  p_city text default 'Kenitra',
   p_items jsonb,
   p_note text,
   p_coupon_code text,
@@ -703,6 +706,8 @@ declare
   v_variant_stock integer;
   v_total_items integer := 0;
   v_storewide_active boolean := false;
+  v_coupon_valid boolean := false;
+  v_coupon_message text := '';
   i integer;
 begin
   -- Idempotency: dedicated column (not order id / tracking token).
@@ -784,11 +789,13 @@ begin
 
   -- Apply coupon (authoritative)
   if p_coupon_code is not null and p_coupon_code <> '' then
-    select * into v_discount_total from public.validate_coupon(p_coupon_code, v_subtotal);
-    if not (select valid from public.validate_coupon(p_coupon_code, v_subtotal)) then
-      raise exception 'Coupon invalide : %', (select message from public.validate_coupon(p_coupon_code, v_subtotal));
+    select valid, discount_amount, message
+    into v_coupon_valid, v_discount_total, v_coupon_message
+    from public.validate_coupon(p_coupon_code, v_subtotal);
+
+    if not v_coupon_valid then
+      raise exception 'Coupon invalide : %', v_coupon_message;
     end if;
-    select discount_amount into v_discount_total from public.validate_coupon(p_coupon_code, v_subtotal);
   end if;
 
   -- Delivery fee
@@ -813,7 +820,7 @@ begin
   -- Insert order (customer_id atomic; idempotency_key stored)
   insert into public.orders (
     auth_user_id, customer_id, client_email, client_name, customer_name,
-    phone, address, items, subtotal, discount_total, delivery_fee, total,
+    phone, address, city, items, subtotal, discount_total, delivery_fee, total,
     status, note, tracking_token, order_number, idempotency_key
   )
   values (
@@ -824,6 +831,7 @@ begin
     p_customer_name,
     p_phone,
     p_address,
+    p_city,
     p_items,
     v_subtotal,
     v_discount_total,
@@ -926,11 +934,16 @@ begin
 end;
 $$;
 
--- place_order_rpc is invoked only server-side (createAdminClient → service_role).
+-- place_order_rpc, get_order_for_tracking and order_reference_for_tracking
+-- are invoked only server-side (createAdminClient → service_role).
 -- Revoke direct execution from anon / authenticated / public.
 revoke execute on function public.place_order_rpc(
-  uuid, uuid, text, text, text, text, text, jsonb, text, text, text
+  uuid, uuid, text, text, text, text, text, text, jsonb, text, text, text
 ) from anon, authenticated, public;
+revoke execute on function public.get_order_for_tracking(text, text)
+  from anon, authenticated, public;
+revoke execute on function public.order_reference_for_tracking(text)
+  from anon, authenticated, public;
 
 -- validate_coupon is read-only and is invoked via the SSR client (anon-capable
 -- during guest checkout). Kept executable so Phase-1 actions keep working.
