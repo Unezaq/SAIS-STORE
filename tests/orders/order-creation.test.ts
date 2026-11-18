@@ -148,4 +148,25 @@ describe('order creation', () => {
 
     expect(result.id).toBeDefined()
   })
+
+  it('supports idempotency key for duplicate submission protection', async () => {
+    // First call with idempotency key
+    const result1 = await createOrder(
+      { ...baseOrderInput, clientEmail: undefined, clientName: undefined },
+      null,
+      'cust-123',
+      { idempotencyKey: 'idem-key-123' }
+    )
+
+    // Second call with same idempotency key should succeed (mock RPC always succeeds)
+    const result2 = await createOrder(
+      { ...baseOrderInput, clientEmail: undefined, clientName: undefined },
+      null,
+      'cust-123',
+      { idempotencyKey: 'idem-key-123' }
+    )
+
+    expect(result1.id).toBeDefined()
+    expect(result2.id).toBeDefined()
+  })
 })

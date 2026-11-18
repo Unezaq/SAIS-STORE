@@ -26,6 +26,14 @@ import {
   readSessionCookie,
 } from '@/lib/auth/session'
 import { normalizeMoroccanPhone } from '@/lib/phone'
+import {
+  checkIdentifierRateLimit,
+  checkIpRateLimit,
+  recordIdentifierFailure,
+  recordIpFailure,
+  clearIdentifierFailure,
+  clearIpFailure,
+} from '@/lib/auth/rate-limit'
 
 const INVALID_IDENTIFIER_ERROR = 'Numéro de téléphone ou email incorrect.'
 const INVALID_PASSWORD_ERROR = 'Mot de passe incorrect.'
@@ -87,25 +95,39 @@ export async function registerCustomerAction(
 
   const { fullName, city, address, email, phone, password } = parsed.data
 
+  const normalizedEmail = normalizeEmail(email)
+
+  // Rate limit per identifier (email/phone) — prevent rapid registration attempts
+  const regRateLimit = checkIdentifierRateLimit(normalizedEmail)
+  if (!regRateLimit.allowed) {
+    return {
+      ok: false,
+      error: 'Trop de tentatives d’inscription. Réessayez plus tard.',
+    }
+  }
+
   // Password strength
   const strength = validatePasswordStrength(password)
   if (!strength.valid) {
+    recordIdentifierFailure(normalizedEmail)
     return { ok: false, error: strength.message ?? GENERIC_ERROR }
   }
 
   // Normalize phone
   const normalizedPhone = normalizePhone(phone)
   if (!normalizedPhone) {
+    recordIdentifierFailure(normalizedEmail)
     return { ok: false, error: 'Numéro de téléphone marocain invalide.' }
   }
-
-  const normalizedEmail = normalizeEmail(email)
 
   try {
     // Check for duplicates — generic error to avoid account enumeration
     const existingEmail = await findCustomerByIdentifier(normalizedEmail)
     const existingPhone = await findCustomerByIdentifier(normalizedPhone)
     if (existingEmail.customer || existingPhone.customer) {
+      // Duplicate registration attempt — count as failure to slow enumeration
+      recordIdentifierFailure(normalizedEmail)
+      recordIdentifierFailure(normalizedPhone)
       return {
         ok: false,
         error: 'Un compte utilise déjà cet email ou ce numéro de téléphone.',
@@ -131,6 +153,7 @@ export async function registerCustomerAction(
     const { sessionToken } = await createCustomerSession(customer.id)
     await setSessionCookie(sessionToken)
 
+    clearIdentifierFailure(normalizedEmail)
     revalidatePath('/account')
     return { ok: true, customerId: customer.id }
   } catch {
@@ -163,22 +186,39 @@ export async function loginCustomerAction(
 
   const { identifier, password } = parsed.data
 
+  // Normalize identifier for rate limiting (email lowercase, phone normalized)
+  const normId = identifier.includes('@')
+    ? identifier.toLowerCase().trim()
+    : normalizeMoroccanPhone(identifier) ?? identifier.trim().toLowerCase()
+
+  // Rate limit per identifier — prevent brute-force login attempts
+  const loginRateLimit = checkIdentifierRateLimit(normId)
+  if (!loginRateLimit.allowed) {
+    return {
+      ok: false,
+      error: 'Trop de tentatives de connexion. Réessayez plus tard.',
+    }
+  }
+
   try {
     const { customer, credential } = await findCustomerByIdentifier(identifier)
 
     // Generic error if customer not found — prevents account enumeration
     if (!customer || !credential) {
+      recordIdentifierFailure(normId)
       return { ok: false, error: INVALID_IDENTIFIER_ERROR }
     }
 
     // Inactive account — generic error
     if (!customer.is_active) {
+      recordIdentifierFailure(normId)
       return { ok: false, error: INVALID_IDENTIFIER_ERROR }
     }
 
     // Verify password
     const isValid = await verifyPassword(password, credential.password_hash)
     if (!isValid) {
+      recordIdentifierFailure(normId)
       return { ok: false, error: INVALID_PASSWORD_ERROR }
     }
 
@@ -186,9 +226,11 @@ export async function loginCustomerAction(
     const { sessionToken } = await createCustomerSession(customer.id)
     await setSessionCookie(sessionToken)
 
+    clearIdentifierFailure(normId)
     revalidatePath('/account')
     return { ok: true, customerId: customer.id }
   } catch {
+    recordIdentifierFailure(normId)
     return { ok: false, error: GENERIC_ERROR }
   }
 }
