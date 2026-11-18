@@ -666,7 +666,7 @@ create or replace function public.place_order_rpc(
   p_customer_name text,
   p_phone text,
   p_address text,
-  p_city text default 'Kenitra',
+  p_city text,
   p_items jsonb,
   p_note text,
   p_coupon_code text,
