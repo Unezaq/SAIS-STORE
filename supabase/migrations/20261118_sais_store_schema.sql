@@ -321,8 +321,32 @@ alter table public.settings add column if not exists discount_start_date timesta
 alter table public.settings add column if not exists discount_end_date timestamptz;
 
 -- --------------------------------------------------------
+-- 13c. Admin helper function (is_admin)
+--     SECURITY DEFINER so it can read public.profiles even when RLS
+--     would block the calling user. STABLE: same result within a session.
+--     Admin = app_metadata.role='admin' OR profiles.role='admin' (id = auth.uid()).
+-- --------------------------------------------------------
+create or replace function public.is_admin()
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  if (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin' then
+    return true;
+  end if;
+  return exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.role = 'admin'
+  );
+end;
+$$;
+
+-- --------------------------------------------------------
 -- 14. RLS on every table
---     Admin = profiles.role='admin'  OR  Supabase app_metadata.role='admin'
+--     Admin = public.is_admin()  (profiles.role='admin' OR app_metadata.role='admin')
 --     (bridge: admin login sets app_metadata; profiles.role is the source of truth)
 -- --------------------------------------------------------
 alter table public.settings enable row level security;
@@ -339,9 +363,8 @@ alter table public.order_items enable row level security;
 alter table public.order_status_history enable row level security;
 alter table public.coupons enable row level security;
 
--- admin helper expression (reused inline)
---   (auth.jwt()->'app_metadata'->>'role') = 'admin'
---   or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin')
+-- Admin check helper is defined below as public.is_admin()
+-- (SECURITY DEFINER, STABLE, search_path = public). Used in all policies.
 
 -- settings: public read; admin all
 drop policy if exists "Public read settings" on public.settings;
@@ -350,10 +373,8 @@ create policy "Public read settings" on public.settings
 drop policy if exists "Admin manage settings" on public.settings;
 create policy "Admin manage settings" on public.settings
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- products: public read ACTIVE only; admin all
 drop policy if exists "Public read active products" on public.products;
@@ -362,10 +383,8 @@ create policy "Public read active products" on public.products
 drop policy if exists "Admin manage products" on public.products;
 create policy "Admin manage products" on public.products
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- product_variants: public read; admin all
 drop policy if exists "Public read product variants" on public.product_variants;
@@ -374,10 +393,8 @@ create policy "Public read product variants" on public.product_variants
 drop policy if exists "Admin manage product variants" on public.product_variants;
 create policy "Admin manage product variants" on public.product_variants
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- profiles: users own; admin read all
 drop policy if exists "Users read own profile" on public.profiles;
@@ -389,8 +406,7 @@ create policy "Users update own profile" on public.profiles
 drop policy if exists "Admin read all profiles" on public.profiles;
 create policy "Admin read all profiles" on public.profiles
   for select to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin());
 
 -- addresses: users CRUD own; admin all
 drop policy if exists "Users read own addresses" on public.addresses;
@@ -408,10 +424,8 @@ create policy "Users delete own addresses" on public.addresses
 drop policy if exists "Admin manage addresses" on public.addresses;
 create policy "Admin manage addresses" on public.addresses
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- clients: guest profiles — owner (auth_user_id) read; admin all. No public select.
 drop policy if exists "Users read own client profile" on public.clients;
@@ -420,10 +434,8 @@ create policy "Users read own client profile" on public.clients
 drop policy if exists "Admin manage clients" on public.clients;
 create policy "Admin manage clients" on public.clients
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- customers / credentials / sessions: NOT publicly readable.
 -- Independent customer auth is mediated by server actions (service_role). RLS is
@@ -438,16 +450,12 @@ drop policy if exists "Public can create orders" on public.orders;
 drop policy if exists "Users or admins read orders" on public.orders;
 create policy "Users or admins read orders" on public.orders
   for select to authenticated
-  using (auth_user_id = auth.uid()
-      or (auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (auth_user_id = auth.uid() or public.is_admin());
 drop policy if exists "Admins update orders" on public.orders;
 create policy "Admins update orders" on public.orders
   for update to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- order_items: order owner (auth_user_id) or admin only. Not publicly selectable.
 drop policy if exists "Users read own order items" on public.order_items;
@@ -461,10 +469,8 @@ create policy "Users read own order items" on public.order_items
 drop policy if exists "Admin manage order items" on public.order_items;
 create policy "Admin manage order items" on public.order_items
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- order_status_history: order owner or admin only. Not publicly selectable.
 drop policy if exists "Users read own order status history" on public.order_status_history;
@@ -478,10 +484,8 @@ create policy "Users read own order status history" on public.order_status_histo
 drop policy if exists "Admin manage order status history" on public.order_status_history;
 create policy "Admin manage order status history" on public.order_status_history
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- coupons: NOT publicly selectable (validated only via SECURITY DEFINER RPC).
 drop policy if exists "Coupons are not publicly readable" on public.coupons;
@@ -490,10 +494,8 @@ create policy "Coupons are not publicly readable" on public.coupons
 drop policy if exists "Admin manage coupons" on public.coupons;
 create policy "Admin manage coupons" on public.coupons
   for all to authenticated
-  using ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-      or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'))
-  with check ((auth.jwt()->'app_metadata'->>'role') = 'admin'
-           or exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.role = 'admin'));
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- --------------------------------------------------------
 -- 15. RPCs (fixed search_path; SECURITY DEFINER where server-side only)

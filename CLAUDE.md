@@ -103,7 +103,7 @@ NO public INSERT on orders/order_items: creation only via place_order_rpc (servi
 
 **admin_accounts / client_accounts** — legacy (seed-marked "not used for authentication"); no code reads them; retained in seed only as empty legacy tables (not in consolidated migration).
 
-**Admin definition (RLS):** `profiles.role = 'admin'` OR `auth.jwt()->'app_metadata'->>'role' = 'admin'` (bridge during transition).
+**Admin definition (RLS):** `public.is_admin()` — returns true when `auth.jwt()->'app_metadata'->>'role' = 'admin'` OR `profiles.role = 'admin'` (profiles.id = auth.uid()). Implemented as `SECURITY DEFINER`, `STABLE`, `search_path = public` function so it can read `public.profiles` despite RLS.
 
 ## RPCs (SECURITY DEFINER, `set search_path = public`)
 - `place_order_rpc(p_auth_user_id, p_customer_id, p_client_email, p_client_name, p_customer_name, p_phone, p_address, p_items, p_note, p_coupon_code, p_idempotency_key)` → order_id, order_number, tracking_token, subtotal, discount_total, delivery_fee, total, status. Atomic: validate, stock (incl. variants), coupon, totals, insert order + items, decrement stock, increment coupon, history. `EXECUTE` revoked from anon/authenticated/public (called server-side via service_role only).
@@ -111,6 +111,7 @@ NO public INSERT on orders/order_items: creation only via place_order_rpc (servi
 - `order_reference_for_tracking(p_order_id)` → text.
 - `get_order_for_tracking(p_order_number, p_phone)` → limited safe order view; returns nothing when phone invalid or order not found.
 - `normalize_moroccan_phone(p_value)` → text (immutable).
+- `is_admin()` → boolean (SECURITY DEFINER, STABLE). Admin check used by all RLS policies.
 
 ## Migration notes
 - Single idempotent migration: `supabase/migrations/20261118_sais_store_schema.sql` (replaces all prior migrations; old files deleted). Safe to re-run.
