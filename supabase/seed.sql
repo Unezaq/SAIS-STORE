@@ -13,10 +13,10 @@ insert into public.settings (
   'Paiement à la livraison', 'MAD', 22.00, 3, 0.00
 ) on conflict (id) do nothing;
 
--- Demo products (id = uuid; slug must be unique)
+-- Demo products (id = uuid; slug must be unique; stock > 0 so they can be ordered)
 insert into public.products (
   id, title, slug, slug_category, category_name, price, original_price,
-  image_url, colors, color_images, sizes, fabric, features, badge, ref, description
+  image_url, colors, color_images, sizes, fabric, features, badge, ref, description, stock
 ) values
 (
   gen_random_uuid(),
@@ -34,7 +34,8 @@ insert into public.products (
   array['Doux','Chaud','Lavable'],
   null,
   'PYJ-01',
-  'Pyjama polaire pour enfants, confortable et chaud.'
+  'Pyjama polaire pour enfants, confortable et chaud.',
+  50
 ),
 (
   gen_random_uuid(),
@@ -52,7 +53,8 @@ insert into public.products (
   array['Léger','Élégant'],
   'Promo',
   'PEIG-02',
-  'Peignoir en satin, idéal pour l’hiver.'
+  'Peignoir en satin, idéal pour l’hiver.',
+  30
 ),
 (
   gen_random_uuid(),
@@ -70,7 +72,8 @@ insert into public.products (
   array['Chaud','Confortable'],
   null,
   'ENS-03',
-  'Ensemble hiver deux pièces pour femme.'
+  'Ensemble hiver deux pièces pour femme.',
+  20
 )
 on conflict (slug) do nothing;
 
