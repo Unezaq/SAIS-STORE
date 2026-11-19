@@ -4,27 +4,19 @@ import { PageTransition } from '@/components/layout/PageTransition'
 import { SiteFooter } from '@/components/layout/SiteFooter'
 import { CartProvider } from '@/components/storefront/CartProvider'
 import { getSettings } from '@/lib/products'
-import { getAuthenticatedUser } from '@/lib/supabase/auth'
-import { getCustomerFromSession } from '@/lib/auth/current-customer'
 
 export default async function StorefrontLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [settings, authUser, customer] = await Promise.all([
-    getSettings(),
-    getAuthenticatedUser(),
-    getCustomerFromSession(),
-  ])
-  const isAdmin = authUser?.app_metadata?.role === 'admin'
-  const isCustomer = Boolean(customer)
+  const settings = await getSettings()
 
   return (
     <CartProvider>
       <SmoothScrollProvider>
         <div className="flex min-h-dvh flex-col bg-background">
-          <AdaptiveNavigation settings={settings} isAdmin={isAdmin} />
+          <AdaptiveNavigation settings={settings} isAdmin={false} />
           <main className="relative z-10 flex-1 bg-background">
             <PageTransition>{children}</PageTransition>
           </main>

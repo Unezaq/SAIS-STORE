@@ -9,12 +9,13 @@ import { OrderTimeline } from '@/components/storefront/OrderTimeline'
 import { Button } from '@/components/ui/Button'
 import { clientEnv } from '@/lib/env'
 import { formatMoroccanPhone, normalizeMoroccanPhone, whatsappNumber } from '@/lib/phone'
-import type { StoreClient, StoreSettings } from '@/lib/types/store'
+import type { StoreSettings } from '@/lib/types/store'
 import { cn, formatMAD } from '@/lib/utils'
 
 interface DeliveryDetails {
   customerName: string
   phone: string
+  city: string
   address: string
   clientEmail: string
   couponCode: string
@@ -45,12 +46,8 @@ function newIdempotencyKey(): string {
 
 export function CheckoutForm({
   settings,
-  profile,
-  isAuthenticated,
 }: {
   settings: StoreSettings
-  profile: Pick<StoreClient, 'email' | 'firstName' | 'lastName' | 'phone' | 'address'> | null
-  isAuthenticated: boolean
 }) {
   const { items, subtotal, ready, clearCart } = useCart()
   const itemCount = items.reduce((total, item) => total + item.quantity, 0)
@@ -72,14 +69,19 @@ export function CheckoutForm({
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const phone = normalizeMoroccanPhone(String(formData.get('phone') ?? ''))
+    const city = String(formData.get('city') ?? '').trim()
     const address = String(formData.get('address') ?? '').trim()
 
     if (!phone) {
       setError('Saisissez un numéro marocain valide, par exemple 06 12 34 56 78.')
       return
     }
+    if (!city) {
+      setError('Saisissez votre ville.')
+      return
+    }
     if (address.length < 10) {
-      setError('Précisez votre adresse : ville, quartier et rue.')
+      setError('Précisez votre adresse : quartier et rue.')
       return
     }
 
@@ -87,6 +89,7 @@ export function CheckoutForm({
     setDetails({
       customerName: String(formData.get('customerName') ?? '').trim(),
       phone,
+      city,
       address,
       clientEmail: String(formData.get('clientEmail') ?? '').trim(),
       couponCode: String(formData.get('couponCode') ?? '').trim(),
@@ -112,6 +115,7 @@ export function CheckoutForm({
     const formData = new FormData()
     formData.set('customerName', details.customerName)
     formData.set('phone', details.phone)
+    formData.set('city', details.city)
     formData.set('address', details.address)
     formData.set('clientEmail', details.clientEmail)
     formData.set('couponCode', details.couponCode)
@@ -239,22 +243,6 @@ export function CheckoutForm({
             Continuer mes achats
           </Link>
         </div>
-
-        {!isAuthenticated && (
-          <div className="mt-fib-3 rounded-2xl bg-primary/5 p-4 ring-1 ring-primary/15">
-            <p className="text-sm font-medium text-ink">Gardez vos commandes au même endroit</p>
-            <p className="mt-1 text-xs leading-relaxed text-text-muted">
-              Créez votre compte avec ce numéro de téléphone : vos commandes passées seront
-              rattachées automatiquement à votre espace client.
-            </p>
-            <Link
-              href="/register"
-              className="press mt-2 inline-flex h-10 items-center justify-center rounded-full bg-ink px-4 text-[13px] font-medium text-white hover:bg-ink/90"
-            >
-              Créer mon compte
-            </Link>
-          </div>
-        )}
       </section>
     )
   }
@@ -315,12 +303,6 @@ export function CheckoutForm({
             <p className="mt-1 text-sm text-text-muted">
               Paiement en espèces à la réception. Aucun paiement en ligne n’est demandé.
             </p>
-            {profile && (
-              <p className="mt-2 text-xs text-text-muted">
-                Vos coordonnées enregistrées sont préremplies. Vous pouvez les modifier pour
-                cette commande.
-              </p>
-            )}
 
             <div className="mt-6 grid gap-4">
               <label className={labelClassName}>
@@ -328,7 +310,7 @@ export function CheckoutForm({
                 <input
                   name="customerName"
                   autoComplete="name"
-                  defaultValue={profile ? `${profile.firstName} ${profile.lastName}`.trim() : ''}
+                  defaultValue=""
                   required
                   minLength={3}
                   maxLength={160}
@@ -342,7 +324,7 @@ export function CheckoutForm({
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  defaultValue={profile?.phone ?? ''}
+                  defaultValue=""
                   placeholder="06 12 34 56 78"
                   required
                   maxLength={18}
@@ -353,11 +335,23 @@ export function CheckoutForm({
                 </span>
               </label>
               <label className={labelClassName}>
-                Adresse complète (ville, quartier, rue)
+                Ville
+                <input
+                  name="city"
+                  autoComplete="address-level2"
+                  defaultValue=""
+                  placeholder="Kenitra"
+                  required
+                  maxLength={100}
+                  className={fieldClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Adresse complète (quartier, rue)
                 <textarea
                   name="address"
                   autoComplete="street-address"
-                  defaultValue={profile?.address ?? ''}
+                  defaultValue=""
                   required
                   minLength={10}
                   maxLength={500}
@@ -371,7 +365,7 @@ export function CheckoutForm({
                   name="clientEmail"
                   type="email"
                   autoComplete="email"
-                  defaultValue={profile?.email ?? ''}
+                  defaultValue=""
                   maxLength={254}
                   className={fieldClassName}
                 />
@@ -445,6 +439,7 @@ export function CheckoutForm({
               <dl className="mt-4 divide-y divide-hairline rounded-2xl bg-surface-soft px-4">
                 {[
                   { label: 'Nom', value: details.customerName },
+                  { label: 'Ville', value: details.city },
                   { label: 'Téléphone', value: formatMoroccanPhone(details.phone) },
                   { label: 'Adresse', value: details.address },
                   ...(details.clientEmail
@@ -474,7 +469,7 @@ export function CheckoutForm({
                   className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
                 />
                 <span>
-                  Je confirme que mon nom, mon numéro de téléphone et mon adresse sont exacts.
+                  Je confirme que mon nom, mon numéro de téléphone, ma ville et mon adresse sont exacts.
                   La commande sera préparée avec ces informations.
                 </span>
               </label>

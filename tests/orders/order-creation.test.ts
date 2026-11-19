@@ -61,6 +61,7 @@ beforeEach(() => {
 const baseOrderInput: Omit<StoreOrder, 'id' | 'createdAt'> = {
   customerName: 'Test Customer',
   phone: '+212612345678',
+  city: 'Kenitra',
   address: '123 Rue Test, Kenitra',
   items: [
     {

@@ -27,7 +27,7 @@ export function BottomTabBar({ cartCount = 0, onOpenCart, onOpenSearch }: Bottom
     { id: 'boutique', label: 'Boutique', href: '/boutique', icon: Grid },
     { id: 'search', label: 'Recherche', href: '#search', icon: Search, isAction: true },
     { id: 'cart', label: 'Panier', href: '#cart', icon: ShoppingBag, isAction: true, badge: cartCount },
-    { id: 'account', label: 'Compte', href: '/account', icon: User },
+    { id: 'suivre', label: 'Suivi', href: '/suivre', icon: User },
   ]
 
   return (

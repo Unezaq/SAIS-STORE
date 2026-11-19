@@ -4,8 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { normalizeMoroccanPhone } from '@/lib/phone'
 import { normalizeOrderReference, orderReference } from '@/lib/orderStatus'
-import { getAuthenticatedUser } from '@/lib/supabase/auth'
-import { getAuthenticatedCustomer } from '@/actions/customer-auth'
 import {
   createOrder,
   getOrderByToken,
@@ -25,6 +23,9 @@ import type { StoreOrder } from '@/lib/types/store'
  * Prices and totals are ALWAYS computed server-side (in the place_order_rpc
  * PostgreSQL function). The client only sends product_id, variant, quantity
  * and coupon code. Never trusts any price/discount/total from the browser.
+ *
+ * Guest-first: no auth.uid(), no Supabase user session required. Customer
+ * details are stored directly on the orders table.
  */
 
 const emailSchema = z.email()
@@ -137,6 +138,7 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
     .object({
       customerName: z.string().trim().min(3).max(160),
       phone: z.string().regex(/^\+212[5-7]\d{8}$/),
+      city: z.string().trim().min(1).max(100),
       address: z.string().trim().min(10).max(500),
       clientEmail: z.union([emailSchema, z.literal('')]),
       couponCode: z.string().trim().max(64).optional(),
@@ -145,6 +147,7 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
     .safeParse({
       customerName: formString(formData, 'customerName'),
       phone: phone ?? '',
+      city: formString(formData, 'city'),
       address: formString(formData, 'address'),
       clientEmail: formString(formData, 'clientEmail').toLowerCase(),
       couponCode: formString(formData, 'couponCode'),
@@ -155,7 +158,7 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
     return {
       ok: false,
       error:
-        'Vérifiez votre nom complet, votre numéro de téléphone marocain et votre adresse de livraison.',
+        'Vérifiez votre nom complet, votre ville, votre numéro de téléphone marocain et votre adresse de livraison.',
     }
   }
 
@@ -164,8 +167,6 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
     return { ok: false, error: 'Votre panier est vide ou invalide. Rechargez la page et réessayez.' }
   }
 
-  const authenticatedUser = await getAuthenticatedUser()
-  const customer = await getAuthenticatedCustomer()
   const [settings, products] = await Promise.all([
     getSettings(),
     Promise.all(items.data.map((item) => getProduct(item.slug))),
@@ -228,17 +229,13 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
       ? 0
       : settings.deliveryFee
   const total = subtotal - discountTotal + deliveryFee
-  const clientEmail =
-    authenticatedUser?.email?.toLowerCase() ||
-    customer?.email ||
-    parsed.data.clientEmail ||
-    undefined
 
   const order = await createOrder(
     {
-      clientEmail,
+      clientEmail: parsed.data.clientEmail || undefined,
       clientName: parsed.data.customerName,
       customerName: parsed.data.customerName,
+      city: parsed.data.city,
       phone: parsed.data.phone,
       address: parsed.data.address,
       items: orderItems,
@@ -252,14 +249,13 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
       paymentMethod: 'cod',
       paymentStatus: 'unpaid',
     },
-    authenticatedUser?.id ?? null,
-    customer?.id ?? null,
+    null,
+    null,
     { couponCode, idempotencyKey }
   )
 
   revalidatePath('/admin/orders')
   revalidatePath('/admin/clients')
-  revalidatePath('/account')
 
   return {
     ok: true,

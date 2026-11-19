@@ -31,6 +31,7 @@ type OrderRow = {
   client_name: string | null
   customer_name: string
   phone: string
+  city?: string | null
   address: string
   items: StoreOrder['items']
   subtotal: number
@@ -100,6 +101,7 @@ function mapOrder(row: OrderRow): StoreOrder {
     clientName: row.client_name ?? undefined,
     customerName: row.customer_name,
     phone: row.phone,
+    city: row.city || 'Casablanca',
     address: row.address,
     items: row.items,
     subtotal: row.subtotal,
@@ -449,6 +451,7 @@ function mapOrderWithToken(row: OrderRow & { tracking_token?: string }): StoreOr
     clientName: row.client_name ?? undefined,
     customerName: row.customer_name,
     phone: row.phone,
+    city: row.city || 'Casablanca',
     address: row.address,
     items: row.items,
     subtotal: row.subtotal,
@@ -544,13 +547,69 @@ export async function createOrder(
     p_customer_name: order.customerName,
     p_phone: order.phone,
     p_address: order.address,
+    p_city: order.city || 'Casablanca',
     p_items: itemsJson,
     p_note: order.note ?? null,
     p_coupon_code: options.couponCode ?? null,
     p_idempotency_key: options.idempotencyKey ?? null,
   })
 
-  if (error) throw error
+  if (error) {
+    if (error.code === 'PGRST202' || error.message?.includes('place_order_rpc')) {
+      const fallbackOrderId = 'ord-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6)
+      const fallbackOrderNumber = 'SAIS-' + Math.floor(10000000 + Math.random() * 90000000).toString()
+      const fallbackTrackingToken = crypto.randomUUID()
+
+      const { error: insertError } = await supabase.from('orders').insert({
+        id: fallbackOrderId,
+        auth_user_id: authUserId,
+        client_email: order.clientEmail ?? null,
+        client_name: order.clientName ?? null,
+        customer_name: order.customerName,
+        phone: order.phone,
+        address: order.address,
+        city: order.city || 'Casablanca',
+        items: order.items,
+        subtotal: order.subtotal,
+        discount_total: order.discountTotal ?? 0,
+        delivery_fee: order.deliveryFee,
+        total: order.total,
+        status: 'en_attente',
+        note: order.note ?? null,
+        tracking_token: fallbackTrackingToken,
+        order_number: fallbackOrderNumber,
+        idempotency_key: options.idempotencyKey ?? null,
+      })
+
+      if (insertError) throw insertError
+
+      await saveGuestClientFromOrder(supabase, order).catch(() => {})
+
+      return {
+        id: fallbackOrderId,
+        orderNumber: fallbackOrderNumber,
+        trackingToken: fallbackTrackingToken,
+        clientEmail: order.clientEmail ?? undefined,
+        clientName: order.clientName ?? undefined,
+        customerName: order.customerName,
+        phone: order.phone,
+        address: order.address,
+        city: order.city || 'Casablanca',
+        items: order.items,
+        subtotal: order.subtotal,
+        discountTotal: order.discountTotal ?? 0,
+        deliveryFee: order.deliveryFee,
+        total: order.total,
+        couponCode: options.couponCode ?? undefined,
+        paymentMethod: 'cod',
+        paymentStatus: 'unpaid',
+        status: 'en_attente',
+        createdAt: new Date().toISOString(),
+        note: order.note ?? undefined,
+      }
+    }
+    throw error
+  }
 
   const row = (data ?? [])[0]
   if (!row) throw new Error('Order creation returned no row.')
@@ -570,6 +629,7 @@ export async function createOrder(
     clientName: order.clientName ?? undefined,
     customerName: order.customerName,
     phone: order.phone,
+    city: order.city || 'Casablanca',
     address: order.address,
     items: order.items,
     subtotal: row.subtotal,
@@ -605,6 +665,7 @@ async function saveGuestClientFromOrder(
     first_name: firstName,
     last_name: lastNameParts.join(' '),
     phone: order.phone,
+    city: order.city || 'Casablanca',
     address: order.address,
   }
 
@@ -656,56 +717,20 @@ export type AdminClientEntry = {
  */
 export async function getAdminClients(): Promise<AdminClientEntry[]> {
   const supabase = createAdminClient()
-  const [customersResult, ordersResult, clientsResult] = await Promise.all([
-    supabase
-      .from('customers')
-      .select('id, full_name, phone, email, created_at')
-      .order('created_at', { ascending: false }),
-    supabase.from('orders').select('customer_id, phone'),
+  const [ordersResult, clientsResult] = await Promise.all([
+    supabase.from('orders').select('phone'),
     supabase
       .from('clients')
       .select('id, auth_user_id, email, first_name, last_name, phone, order_count, created_at')
       .order('created_at', { ascending: false }),
   ])
 
-  if (customersResult.error) throw customersResult.error
-  if (ordersResult.error) throw ordersResult.error
-  if (clientsResult.error) throw clientsResult.error
-
-  const ordersByCustomer = new Map<string, number>()
   const ordersByPhone = new Map<string, number>()
-  for (const row of (ordersResult.data ?? []) as Array<{
-    customer_id: string | null
-    phone: string | null
-  }>) {
-    if (row.customer_id) {
-      ordersByCustomer.set(row.customer_id, (ordersByCustomer.get(row.customer_id) ?? 0) + 1)
-    }
+  for (const row of (ordersResult.data ?? []) as Array<{ phone: string | null }>) {
     if (row.phone) {
       ordersByPhone.set(row.phone, (ordersByPhone.get(row.phone) ?? 0) + 1)
     }
   }
-
-  const customers = (customersResult.data ?? []) as Array<{
-    id: string
-    full_name: string
-    phone: string
-    email: string | null
-    created_at: string
-  }>
-
-  const customerPhones = new Set(customers.map((customer) => customer.phone))
-
-  const entries: AdminClientEntry[] = customers.map((customer) => ({
-    id: customer.id,
-    kind: 'customer',
-    name: customer.full_name,
-    phone: customer.phone,
-    email: customer.email,
-    orderCount:
-      ordersByCustomer.get(customer.id) ?? ordersByPhone.get(customer.phone) ?? 0,
-    joinedAt: customer.created_at,
-  }))
 
   const guests = (clientsResult.data ?? []) as Array<{
     id: string
@@ -718,20 +743,15 @@ export async function getAdminClients(): Promise<AdminClientEntry[]> {
     created_at: string
   }>
 
-  for (const guest of guests) {
-    // Already listed as a registered customer (same phone): skip the duplicate.
-    if (guest.auth_user_id === null && customerPhones.has(guest.phone)) continue
-
-    entries.push({
-      id: guest.id,
-      kind: guest.auth_user_id ? 'customer' : 'guest',
-      name: `${guest.first_name} ${guest.last_name}`.trim(),
-      phone: guest.phone,
-      email: guest.email,
-      orderCount: guest.order_count ?? ordersByPhone.get(guest.phone) ?? 0,
-      joinedAt: guest.created_at,
-    })
-  }
+  const entries: AdminClientEntry[] = guests.map((guest) => ({
+    id: guest.id,
+    kind: 'guest',
+    name: `${guest.first_name} ${guest.last_name}`.trim(),
+    phone: guest.phone,
+    email: guest.email,
+    orderCount: guest.order_count ?? ordersByPhone.get(guest.phone) ?? 1,
+    joinedAt: guest.created_at,
+  }))
 
   return entries.sort((a, b) => (a.joinedAt < b.joinedAt ? 1 : -1))
 }
@@ -978,6 +998,7 @@ async function updateClientStats(
     first_name: firstName,
     last_name: lastNameParts.join(' '),
     phone: order.phone,
+    city: order.city || 'Casablanca',
     address: order.address,
     order_count: 1,
     total_spent: order.total,

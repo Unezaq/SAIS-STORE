@@ -8,6 +8,7 @@ export interface StoreOrder {
   clientName?: string
   customerName: string
   phone: string
+  city: string
   address: string
   items: Array<{
     slug: string

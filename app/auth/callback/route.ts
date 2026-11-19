@@ -14,18 +14,18 @@ export async function GET(request: NextRequest) {
     : '/'
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login?authError=callback', request.url))
+    return NextResponse.redirect(new URL('/admin/login?authError=callback', request.url))
   }
 
   const supabase = await createClient()
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
   if (exchangeError) {
-    return NextResponse.redirect(new URL('/login?authError=callback', request.url))
+    return NextResponse.redirect(new URL('/admin/login?authError=callback', request.url))
   }
 
   const { data, error: userError } = await supabase.auth.getUser()
   if (userError || !data.user?.email || !data.user.email_confirmed_at) {
-    return NextResponse.redirect(new URL('/login?authError=verification', request.url))
+    return NextResponse.redirect(new URL('/admin/login?authError=verification', request.url))
   }
 
   const profile = z.object({
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   }).safeParse(data.user.user_metadata)
 
   if (!profile.success) {
-    return NextResponse.redirect(new URL('/account?profileError=invalid', request.url))
+    return NextResponse.redirect(new URL('/espace-client?profileError=invalid', request.url))
   }
 
   await ensureClientProfile({

@@ -34,7 +34,7 @@ export default async function TrackOrderPage() {
 
       <p className="mt-fib-4 text-sm text-text-muted">
         Vous avez un compte ?{' '}
-        <Link href="/account" className="font-medium text-ink hover:underline">
+        <Link href="/espace-client" className="font-medium text-ink hover:underline">
           Retrouvez toutes vos commandes dans votre espace client
         </Link>
         .

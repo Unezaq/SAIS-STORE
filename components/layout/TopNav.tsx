@@ -180,9 +180,9 @@ export function TopNav({
           </button>
 
           <Link
-            href="/account"
+            href="/suivre"
             className="press flex h-9 w-9 items-center justify-center rounded-full text-ink/70 hover:bg-ink/[0.05] hover:text-ink"
-            aria-label="Mon compte"
+            aria-label="Suivre ma commande"
           >
             <User size={17} strokeWidth={1.8} />
           </Link>
