@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { normalizeMoroccanPhone } from '@/lib/phone'
 import { normalizeOrderReference, orderReference } from '@/lib/orderStatus'
 import { getAuthenticatedUser } from '@/lib/supabase/auth'
-import { getCustomerFromSession } from '@/lib/auth/current-customer'
+import { getAuthenticatedCustomer } from '@/actions/customer-auth'
 import {
   createOrder,
   getOrderByToken,
@@ -165,7 +165,7 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
   }
 
   const authenticatedUser = await getAuthenticatedUser()
-  const customer = await getCustomerFromSession()
+  const customer = await getAuthenticatedCustomer()
   const [settings, products] = await Promise.all([
     getSettings(),
     Promise.all(items.data.map((item) => getProduct(item.slug))),

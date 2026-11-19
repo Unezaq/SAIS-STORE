@@ -3,6 +3,10 @@
 -- Run AFTER supabase/migrations/20261118_sais_store_schema.sql
 -- ========================================================================
 
+-- Ajout des colonnes city/address à profiles (si absent)
+alter table public.profiles add column if not exists city text;
+alter table public.profiles add column if not exists address text;
+
 -- Fonction trigger: crée une ligne profiles (role='customer') quand un nouvel
 -- utilisateur s'inscrit via Supabase Auth.
 create or replace function public.handle_new_user()

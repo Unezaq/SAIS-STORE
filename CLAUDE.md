@@ -40,7 +40,8 @@ f:\sais - store\
 ├── components/   (ui, storefront, admin, layout)
 ├── lib/
 │   ├── supabase/   client, server, admin, auth, middleware, bootstrap-admin
-│   ├── auth/       customers, session, tokens, password, rate-limit, current-customer
+│   ├── auth/       supabase.ts (Supabase Auth helpers for customers)
+│   │   │   [legacy custom auth files: customers, session, tokens, password, rate-limit, current-customer — deprecated]
 │   ├── api/        (empty)
 │   ├── utils/      crypto
 │   ├── types/      store
@@ -121,6 +122,16 @@ NO public INSERT on orders/order_items: creation only via place_order_rpc (servi
 
 ## Settings columns (no secrets)
 store_name, whatsapp_phone (demo number, not a credential), delivery_text, payment_text, currency, delivery_fee, free_delivery_min_items, storewide_discount_percent, discount_start_date, discount_end_date, updated_at. No passwords/keys stored.
+
+## Authentication (Phase 2a)
+Single auth system = Supabase Auth.
+- `lib/auth/supabase.ts` — Supabase Auth helpers: `signUpCustomer`, `signInCustomer`, `signOutCustomer`, `getAuthenticatedCustomer`, `requireCustomer`, `changeCustomerPasswordAction`.
+- `actions/customer-auth.ts` — Server Actions: `registerCustomerAction`, `loginCustomerAction`, `logoutCustomerAction`, `changeCustomerPasswordAction`.
+- `lib/supabase/auth.ts` — `requireAdmin()` checks `profiles.role = 'admin'` (not `app_metadata`).
+- `lib/supabase/bootstrap-admin.ts` — sets both `app_metadata.role='admin'` AND `profiles.role='admin'`.
+- Trigger `handle_new_user` (migration `20261118_auth_trigger.sql`) auto-creates a `profiles` row (`role='customer'`) on every Supabase Auth signup.
+- Admin definition (RLS): `profiles.role = 'admin'` OR `auth.jwt()->'app_metadata'->>'role' = 'admin'`.
+- Legacy custom auth tables (`customers`, `customer_credentials`, `customer_sessions`) and files (`lib/auth/customers.ts`, `session.ts`, `tokens.ts`, `password.ts`, `rate-limit.ts`, `current-customer.ts`) are deprecated — to be removed once all actions use Supabase Auth.
 
 ## Currency / locale
 - MAD, `new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' })`

@@ -3,7 +3,8 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { normalizeMoroccanPhone } from '@/lib/phone'
-import { getCustomerFromSession } from '@/lib/auth/current-customer'
+import { getAuthenticatedCustomer } from '@/actions/customer-auth'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const GENERIC_ERROR = 'Une erreur est survenue. Vérifiez les informations saisies.'
@@ -34,7 +35,7 @@ export type UpdateProfileResult =
 export async function updateCustomerProfileAction(
   formData: FormData
 ): Promise<UpdateProfileResult> {
-  const customer = await getCustomerFromSession()
+  const customer = await getAuthenticatedCustomer()
   if (!customer) {
     return { ok: false, error: 'Connectez-vous pour modifier votre profil.' }
   }
@@ -53,9 +54,6 @@ export async function updateCustomerProfileAction(
     return invalidInput()
   }
 
-  // Two forms feed this action: /account/profile sends `fullName` + `city`,
-  // while /account sends `firstName` + `lastName` and no city. Accept both and
-  // keep the stored city when the form does not carry one.
   const fullName =
     parsed.data.fullName?.trim() ||
     [parsed.data.firstName, parsed.data.lastName]
@@ -79,48 +77,39 @@ export async function updateCustomerProfileAction(
     return { ok: false, error: 'Numéro de téléphone marocain invalide.' }
   }
 
-  let normalizedEmail: string | undefined
-  if (email) {
-    normalizedEmail = email.toLowerCase().trim()
-  }
-
   try {
-    const supabase = createAdminClient()
+    const supabase = await createClient()
+    const admin = createAdminClient()
 
-    // Check uniqueness — generic errors to avoid enumeration
-    if (normalizedEmail && normalizedEmail !== customer.normalized_email) {
-      const { data: existing } = await supabase
-        .from('customers')
+    // Check phone uniqueness — generic errors to avoid enumeration
+    if (normalizedPhone && normalizedPhone !== customer.phone) {
+      const { data: existingPhone } = await supabase
+        .from('profiles')
         .select('id')
-        .eq('normalized_email', normalizedEmail)
+        .eq('phone', normalizedPhone)
         .neq('id', customer.id)
         .maybeSingle()
-      if (existing) {
-        return { ok: false, error: 'Cet email est déjà utilisé par un autre compte.' }
+      if (existingPhone) {
+        return { ok: false, error: 'Ce numéro de téléphone est déjà utilisé par un autre compte.' }
       }
     }
 
-    const { data: existingPhone } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('normalized_phone', normalizedPhone)
-      .neq('id', customer.id)
-      .maybeSingle()
-    if (existingPhone) {
-      return { ok: false, error: 'Ce numéro de téléphone est déjà utilisé par un autre compte.' }
+    // Update email via Supabase Auth if changed
+    if (email && email !== customer.email) {
+      const { error: emailError } = await supabase.auth.updateUser({ email })
+      if (emailError) {
+        return { ok: false, error: 'Impossible de modifier l\'email.' }
+      }
     }
 
-    // Update customer
-    const { error } = await supabase
-      .from('customers')
+    // Update profile in profiles table
+    const { error } = await admin
+      .from('profiles')
       .update({
         full_name: fullName,
         city,
         address,
-        email: normalizedEmail ?? customer.email,
-        normalized_email: normalizedEmail ?? customer.normalized_email,
         phone: normalizedPhone,
-        normalized_phone: normalizedPhone,
         updated_at: new Date().toISOString(),
       })
       .eq('id', customer.id)
