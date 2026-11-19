@@ -29,6 +29,11 @@ export async function requireAdmin() {
   const user = await getAuthenticatedUser()
   if (!user) redirect('/admin/login')
 
+  // Primary check: JWT app_metadata (set server-side by admin.updateUserById)
+  const jwtIsAdmin = (user.app_metadata?.role as string) === 'admin'
+  if (jwtIsAdmin) return user
+
+  // Fallback: profiles table (handles legacy accounts without app_metadata.role)
   const supabase = await createClient()
   const { data: profile } = await supabase
     .from('profiles')

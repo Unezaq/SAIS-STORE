@@ -26,7 +26,6 @@ if (!Array.isArray(store.products) || store.products.length === 0) {
 }
 
 const rows = store.products.map((product) => ({
-  id: product.id,
   title: product.title,
   slug: product.slug,
   slug_category: product.slugCategory,
@@ -36,12 +35,14 @@ const rows = store.products.map((product) => ({
   image_url: product.imageUrl,
   colors: product.colors ?? [],
   color_images: product.colorImages ?? {},
-  sizes: product.sizes ?? [],
+  sizes: product.sizes ?? ['S', 'M', 'L', 'XL', 'XXL'],
   fabric: product.fabric ?? null,
   features: product.features ?? [],
   badge: product.badge ?? null,
   ref: product.ref ?? null,
   description: product.description ?? null,
+  is_active: true,
+  stock: 25,
 }))
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {

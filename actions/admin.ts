@@ -127,11 +127,23 @@ export async function loginAction(formData: FormData) {
     return { ok: false, error: 'Email ou mot de passe incorrect.' }
   }
   if (data.user?.app_metadata?.role !== 'admin') {
+    // Fallback: check profiles table (legacy accounts without app_metadata.role)
+    let isAdmin = false
     if (data.user) {
-      const { error: signOutError } = await supabase.auth.signOut()
-      if (signOutError) throw signOutError
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
+      isAdmin = profile?.role === 'admin'
     }
-    return { ok: false, error: 'Email ou mot de passe incorrect.' }
+    if (!isAdmin) {
+      if (data.user) {
+        const { error: signOutError } = await supabase.auth.signOut()
+        if (signOutError) throw signOutError
+      }
+      return { ok: false, error: 'Email ou mot de passe incorrect.' }
+    }
   }
 
   return { ok: true }
