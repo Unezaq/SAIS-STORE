@@ -27,6 +27,15 @@ export async function getAuthenticatedUser() {
 
 export async function requireAdmin() {
   const user = await getAuthenticatedUser()
-  if (user?.app_metadata?.role !== 'admin') redirect('/admin/login')
+  if (!user) redirect('/admin/login')
+
+  const supabase = await createClient()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'admin') redirect('/admin/login')
   return user
 }

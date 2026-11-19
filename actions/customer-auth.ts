@@ -3,45 +3,12 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import {
-  hashPassword,
-  verifyPassword,
-  validatePasswordStrength,
-} from '@/lib/auth/password'
-import { generateSessionToken, hashSessionToken } from '@/lib/auth/tokens'
-import {
-  createCustomerRecord,
-  findCustomerByIdentifier,
-  createCustomerSession,
-  validateSessionToken,
-  revokeSession,
-  revokeAllCustomerSessions,
-  getCustomerById,
-  updateCustomerPassword,
-  type CustomerRow,
-} from '@/lib/auth/customers'
-import {
-  setSessionCookie,
-  clearSessionCookie,
-  readSessionCookie,
-} from '@/lib/auth/session'
+import { createClient } from '@/lib/supabase/server'
 import { normalizeMoroccanPhone } from '@/lib/phone'
-import {
-  checkIdentifierRateLimit,
-  checkIpRateLimit,
-  recordIdentifierFailure,
-  recordIpFailure,
-  clearIdentifierFailure,
-  clearIpFailure,
-} from '@/lib/auth/rate-limit'
 
 const INVALID_IDENTIFIER_ERROR = 'Numéro de téléphone ou email incorrect.'
 const INVALID_PASSWORD_ERROR = 'Mot de passe incorrect.'
 const GENERIC_ERROR = 'Une erreur est survenue. Vérifiez les informations saisies.'
-
-// ---------------------------------------------------------------------------
-// Validation helpers
-// ---------------------------------------------------------------------------
 
 function formString(formData: FormData, key: string): string {
   const value = formData.get(key)
@@ -61,7 +28,7 @@ function normalizePhone(phone: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Registration
+// Registration (Supabase Auth + profiles trigger creates the profile)
 // ---------------------------------------------------------------------------
 
 export type RegisterResult =
@@ -95,74 +62,47 @@ export async function registerCustomerAction(
 
   const { fullName, city, address, email, phone, password } = parsed.data
 
-  const normalizedEmail = normalizeEmail(email)
-
-  // Rate limit per identifier (email/phone) — prevent rapid registration attempts
-  const regRateLimit = checkIdentifierRateLimit(normalizedEmail)
-  if (!regRateLimit.allowed) {
-    return {
-      ok: false,
-      error: 'Trop de tentatives d’inscription. Réessayez plus tard.',
-    }
-  }
-
-  // Password strength
-  const strength = validatePasswordStrength(password)
-  if (!strength.valid) {
-    recordIdentifierFailure(normalizedEmail)
-    return { ok: false, error: strength.message ?? GENERIC_ERROR }
-  }
-
-  // Normalize phone
   const normalizedPhone = normalizePhone(phone)
   if (!normalizedPhone) {
-    recordIdentifierFailure(normalizedEmail)
     return { ok: false, error: 'Numéro de téléphone marocain invalide.' }
   }
 
   try {
-    // Check for duplicates — generic error to avoid account enumeration
-    const existingEmail = await findCustomerByIdentifier(normalizedEmail)
-    const existingPhone = await findCustomerByIdentifier(normalizedPhone)
-    if (existingEmail.customer || existingPhone.customer) {
-      // Duplicate registration attempt — count as failure to slow enumeration
-      recordIdentifierFailure(normalizedEmail)
-      recordIdentifierFailure(normalizedPhone)
-      return {
-        ok: false,
-        error: 'Un compte utilise déjà cet email ou ce numéro de téléphone.',
-      }
-    }
+    const supabase = await createClient()
 
-    // Hash password
-    const passwordHash = await hashPassword(password)
-
-    // Create customer + credential
-    const { customer } = await createCustomerRecord({
-      fullName,
-      email: normalizedEmail,
-      normalizedEmail,
-      phone: normalizedPhone,
-      normalizedPhone,
-      city,
-      address,
-      passwordHash,
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone: normalizedPhone,
+          city,
+          address,
+        },
+      },
     })
 
-    // Create session immediately (auto-login)
-    const { sessionToken } = await createCustomerSession(customer.id)
-    await setSessionCookie(sessionToken)
+    if (error) {
+      // Generic error to avoid account enumeration
+      return { ok: false, error: 'Impossible de créer ce compte.' }
+    }
 
-    clearIdentifierFailure(normalizedEmail)
+    if (!data.user) {
+      return { ok: false, error: 'Impossible de créer ce compte.' }
+    }
+
+    // Session is automatically set by signUp. Profile is created by the
+    // database trigger handle_new_user().
     revalidatePath('/account')
-    return { ok: true, customerId: customer.id }
+    return { ok: true, customerId: data.user.id }
   } catch {
     return { ok: false, error: GENERIC_ERROR }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Login
+// Login (Supabase Auth)
 // ---------------------------------------------------------------------------
 
 export type LoginResult = { ok: true; customerId: string } | { ok: false; error: string }
@@ -185,54 +125,38 @@ export async function loginCustomerAction(
   }
 
   const { identifier, password } = parsed.data
+  const supabase = await createClient()
 
-  // Normalize identifier for rate limiting (email lowercase, phone normalized)
-  const normId = identifier.includes('@')
-    ? identifier.toLowerCase().trim()
-    : normalizeMoroccanPhone(identifier) ?? identifier.trim().toLowerCase()
+  // Try email first, then phone (Supabase Auth only handles email natively;
+  // phone-first users log in with the internal email derived from their phone).
+  const signInEmail = identifier.includes('@')
+    ? identifier.toLowerCase()
+    : undefined
 
-  // Rate limit per identifier — prevent brute-force login attempts
-  const loginRateLimit = checkIdentifierRateLimit(normId)
-  if (!loginRateLimit.allowed) {
-    return {
-      ok: false,
-      error: 'Trop de tentatives de connexion. Réessayez plus tard.',
-    }
+  let authResult = await supabase.auth.signInWithPassword({
+    email: signInEmail ?? '',
+    password,
+  })
+
+  if (authResult.error && !identifier.includes('@')) {
+    // Fallback: phone-first accounts use an internal email.
+    const phoneEmail = `${identifier.replace(/\D/g, '')}@phone.sais.ma`
+    authResult = await supabase.auth.signInWithPassword({
+      email: phoneEmail,
+      password,
+    })
   }
 
-  try {
-    const { customer, credential } = await findCustomerByIdentifier(identifier)
-
-    // Generic error if customer not found — prevents account enumeration
-    if (!customer || !credential) {
-      recordIdentifierFailure(normId)
-      return { ok: false, error: INVALID_IDENTIFIER_ERROR }
-    }
-
-    // Inactive account — generic error
-    if (!customer.is_active) {
-      recordIdentifierFailure(normId)
-      return { ok: false, error: INVALID_IDENTIFIER_ERROR }
-    }
-
-    // Verify password
-    const isValid = await verifyPassword(password, credential.password_hash)
-    if (!isValid) {
-      recordIdentifierFailure(normId)
-      return { ok: false, error: INVALID_PASSWORD_ERROR }
-    }
-
-    // Create new session (rotation) and set cookie
-    const { sessionToken } = await createCustomerSession(customer.id)
-    await setSessionCookie(sessionToken)
-
-    clearIdentifierFailure(normId)
-    revalidatePath('/account')
-    return { ok: true, customerId: customer.id }
-  } catch {
-    recordIdentifierFailure(normId)
-    return { ok: false, error: GENERIC_ERROR }
+  if (authResult.error) {
+    return { ok: false, error: INVALID_IDENTIFIER_ERROR }
   }
+
+  if (!authResult.data.user) {
+    return { ok: false, error: INVALID_IDENTIFIER_ERROR }
+  }
+
+  revalidatePath('/account')
+  return { ok: true, customerId: authResult.data.user.id }
 }
 
 // ---------------------------------------------------------------------------
@@ -240,31 +164,44 @@ export async function loginCustomerAction(
 // ---------------------------------------------------------------------------
 
 export async function logoutCustomerAction(): Promise<{ ok: boolean }> {
-  try {
-    const token = await readSessionCookie()
-    if (token) {
-      await revokeSession(token)
-    }
-  } catch {
-    // Ignore errors during logout — still clear the cookie
-  }
-
-  await clearSessionCookie()
+  const supabase = await createClient()
+  await supabase.auth.signOut()
   redirect('/')
 }
 
 // ---------------------------------------------------------------------------
-// Get current authenticated customer from session cookie
+// Get current authenticated customer from Supabase session
 // ---------------------------------------------------------------------------
 
-export async function getAuthenticatedCustomer(): Promise<CustomerRow | null> {
-  const token = await readSessionCookie()
-  if (!token) return null
+export type CustomerSession = {
+  id: string
+  email: string | null
+  full_name: string | null
+  phone: string | null
+  city: string | null
+  address: string | null
+  role: string | null
+}
 
-  try {
-    return await validateSessionToken(token)
-  } catch {
-    return null
+export async function getAuthenticatedCustomer(): Promise<CustomerSession | null> {
+  const supabase = await createClient()
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error || !user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, phone, city, address, role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    full_name: profile?.full_name ?? null,
+    phone: profile?.phone ?? null,
+    city: profile?.city ?? null,
+    address: profile?.address ?? null,
+    role: profile?.role ?? null,
   }
 }
 
@@ -272,7 +209,7 @@ export async function getAuthenticatedCustomer(): Promise<CustomerRow | null> {
 // Require authenticated customer (throws redirect if not)
 // ---------------------------------------------------------------------------
 
-export async function requireCustomer(): Promise<CustomerRow> {
+export async function requireCustomer(): Promise<CustomerSession> {
   const customer = await getAuthenticatedCustomer()
   if (!customer) {
     redirect('/login?next=%2Faccount')
@@ -286,7 +223,7 @@ export async function requireCustomer(): Promise<CustomerRow> {
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
-  newPassword: z.string().min(1, 'Nouveau mot de passe requis'),
+  newPassword: z.string().min(8, 'Le mot de passe doit contenir au moins 8 caractères.'),
 })
 
 export async function changeCustomerPasswordAction(
@@ -306,29 +243,16 @@ export async function changeCustomerPasswordAction(
     return { ok: false, error: GENERIC_ERROR }
   }
 
-  const { currentPassword, newPassword } = parsed.data
+  const { newPassword } = parsed.data
 
-  const strength = validatePasswordStrength(newPassword)
-  if (!strength.valid) {
-    return { ok: false, error: strength.message }
+  const supabase = await createClient()
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  })
+
+  if (error) {
+    return { ok: false, error: error.message }
   }
-
-  // Fetch credential
-  const { credential } = await findCustomerByIdentifier(customer.email || customer.phone)
-  if (!credential) {
-    return { ok: false, error: GENERIC_ERROR }
-  }
-
-  const isValid = await verifyPassword(currentPassword, credential.password_hash)
-  if (!isValid) {
-    return { ok: false, error: 'Mot de passe actuel incorrect.' }
-  }
-
-  const newHash = await hashPassword(newPassword)
-  await updateCustomerPassword(customer.id, newHash)
-
-  // Revoke all other sessions (force re-login on other devices)
-  await revokeAllCustomerSessions(customer.id)
 
   revalidatePath('/account/profile')
   return { ok: true }

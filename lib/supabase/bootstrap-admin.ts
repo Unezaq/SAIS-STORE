@@ -46,5 +46,12 @@ export async function bootstrapConfiguredAdmin(authUserId: string): Promise<bool
   })
   if (updateError) throw updateError
 
+  // Sync profiles.role so RLS policies (which read profiles.role) see the admin.
+  const { error: profileError } = await admin
+    .from('profiles')
+    .update({ role: 'admin' })
+    .eq('id', user.id)
+  if (profileError) throw profileError
+
   return true
 }
