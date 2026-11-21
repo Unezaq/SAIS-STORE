@@ -669,22 +669,54 @@ async function saveGuestClientFromOrder(
     address: order.address,
   }
 
-  const { error } = existing
-    ? await supabase
-        .from('clients')
-        .update({
-          ...values,
-          order_count: (existing.order_count ?? 0) + 1,
-          total_spent: (existing.total_spent ?? 0) + order.total,
-        })
-        .eq('id', existing.id)
-    : await supabase.from('clients').insert({
+  if (existing) {
+    const { error } = await supabase
+      .from('clients')
+      .update({
         ...values,
-        order_count: 1,
-        total_spent: order.total,
+        order_count: (existing.order_count ?? 0) + 1,
+        total_spent: (existing.total_spent ?? 0) + order.total,
       })
+      .eq('id', existing.id)
 
-  if (error) throw error
+    if (error) throw error
+    return
+  }
+
+  const { error: insertError } = await supabase.from('clients').insert({
+    ...values,
+    order_count: 1,
+    total_spent: order.total,
+  })
+
+  if (!insertError) return
+
+  // clients.phone is UNIQUE (idx_clients_phone_unique): a concurrent checkout
+  // for the same phone can insert the row between the read above and this
+  // insert. Fold this order into the winner instead of throwing after the order
+  // itself was already created.
+  if (insertError.code !== '23505') throw insertError
+
+  const { data: winner, error: winnerError } = await supabase
+    .from('clients')
+    .select('id, order_count, total_spent')
+    .is('auth_user_id', null)
+    .eq('phone', order.phone)
+    .maybeSingle()
+
+  if (winnerError) throw winnerError
+  if (!winner) throw insertError
+
+  const { error: mergeError } = await supabase
+    .from('clients')
+    .update({
+      ...values,
+      order_count: (winner.order_count ?? 0) + 1,
+      total_spent: (winner.total_spent ?? 0) + order.total,
+    })
+    .eq('id', winner.id)
+
+  if (mergeError) throw mergeError
 }
 
 export async function getClients(): Promise<StoreClient[]> {
