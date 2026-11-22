@@ -68,6 +68,7 @@ export default async function AdminCouponsPage() {
                   <td className="px-4 py-3">
                     <form
                       action={async (formData: FormData) => {
+                        'use server'
                         await toggleCouponActionAdmin(formData)
                       }}
                     >
@@ -106,6 +107,7 @@ export default async function AdminCouponsPage() {
                       </Link>
                       <form
                         action={async (formData: FormData) => {
+                          'use server'
                           await deleteCouponActionAdmin(formData)
                         }}
                       >
