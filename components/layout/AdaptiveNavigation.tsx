@@ -132,6 +132,21 @@ export function AdaptiveNavigation({
               })}
             </ul>
 
+            {settings.freeDeliveryMinItems > 0 && count < settings.freeDeliveryMinItems && (
+              <div className="rounded-2xl bg-primary/5 p-3 ring-1 ring-primary/10">
+                <p className="text-xs font-medium text-primary">
+                  Plus que {settings.freeDeliveryMinItems - count} pièce{settings.freeDeliveryMinItems - count > 1 ? 's' : ''} pour la livraison gratuite !
+                </p>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-primary/10">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, (count / settings.freeDeliveryMinItems) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between border-t border-hairline pt-4">
               <span className="text-sm text-text-muted">Sous-total</span>
               <span className="text-base font-semibold text-ink">{formatMAD(subtotal)}</span>

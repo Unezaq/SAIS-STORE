@@ -1,14 +1,13 @@
 'use client'
 
 import * as React from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CheckCircle, MessageCircle, ShieldCheck, Truck } from 'lucide-react'
-import { placeOrderAction, type PlacedOrderItem } from '@/actions/checkout'
+import { ShieldCheck, Truck } from 'lucide-react'
+import { placeOrderAction } from '@/actions/checkout'
 import { useCart } from '@/components/storefront/CartProvider'
-import { OrderTimeline } from '@/components/storefront/OrderTimeline'
 import { Button } from '@/components/ui/Button'
-import { clientEnv } from '@/lib/env'
-import { formatMoroccanPhone, normalizeMoroccanPhone, whatsappNumber } from '@/lib/phone'
+import { formatMoroccanPhone, normalizeMoroccanPhone } from '@/lib/phone'
 import type { StoreSettings } from '@/lib/types/store'
 import { cn, formatMAD } from '@/lib/utils'
 
@@ -20,13 +19,6 @@ interface DeliveryDetails {
   clientEmail: string
   couponCode: string
   note: string
-}
-
-interface Confirmation {
-  reference: string
-  phone: string
-  total: number
-  items: PlacedOrderItem[]
 }
 
 const fieldClassName =
@@ -50,6 +42,7 @@ export function CheckoutForm({
   settings: StoreSettings
 }) {
   const { items, subtotal, ready, clearCart } = useCart()
+  const router = useRouter()
   const itemCount = items.reduce((total, item) => total + item.quantity, 0)
   const deliveryFee =
     settings.freeDeliveryMinItems > 0 && itemCount >= settings.freeDeliveryMinItems
@@ -63,7 +56,6 @@ export function CheckoutForm({
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState('')
   const [idempotencyKey, setIdempotencyKey] = React.useState('')
-  const [confirmation, setConfirmation] = React.useState<Confirmation | null>(null)
 
   function handleDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -137,13 +129,14 @@ export function CheckoutForm({
         return
       }
 
-      setConfirmation({
-        reference: result.orderNumber,
-        phone: result.phone,
-        total: result.total,
-        items: result.items,
-      })
       clearCart()
+      const token = result.trackingToken || result.orderNumber
+      if (token) {
+        router.push(`/confirmation/${encodeURIComponent(token)}`)
+      } else {
+        setError('La commande a été créée mais le lien de suivi est indisponible.')
+        setPending(false)
+      }
     } catch {
       setError('Impossible d’enregistrer la commande. Réessayez ou écrivez-nous sur WhatsApp.')
       setPending(false)
@@ -152,99 +145,6 @@ export function CheckoutForm({
 
   if (!ready) {
     return <p className="py-12 text-center text-sm text-text-muted">Chargement du panier…</p>
-  }
-
-  if (confirmation) {
-    const firstName = details?.customerName.split(' ')[0] ?? ''
-    const itemDetails = confirmation.items
-      .map((item, index) => {
-        const productUrl = new URL(
-          `/products/${encodeURIComponent(item.slug)}`,
-          clientEnv.NEXT_PUBLIC_SITE_URL
-        ).toString()
-        const imageUrl = new URL(item.imageUrl, clientEnv.NEXT_PUBLIC_SITE_URL).toString()
-        const variants = [item.color, item.size].filter(Boolean).join(' · ')
-
-        return [
-          `${index + 1}. ${item.title}${variants ? ` (${variants})` : ''}`,
-          `Quantité : ${item.quantity} · ${formatMAD(item.price * item.quantity)}`,
-          `Photo : ${imageUrl}`,
-          `Fiche produit : ${productUrl}`,
-        ].join('\n')
-      })
-      .join('\n\n')
-    const whatsappText = encodeURIComponent(
-      `Bonjour SAIS 👋\nJe viens de passer la commande ${confirmation.reference}.\n\n${itemDetails}\n\nTotal à payer à la livraison : ${formatMAD(confirmation.total)}\nMerci de me confirmer la livraison.`
-    )
-
-    return (
-      <section className="mx-auto max-w-2xl rounded-[24px] bg-white p-6 shadow-sm ring-1 ring-hairline md:p-8">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <CheckCircle size={22} />
-          </span>
-          <div>
-            <p className="text-eyebrow uppercase text-text-muted">Commande enregistrée</p>
-            <h1 className="mt-1 text-title text-ink">Merci {firstName}.</h1>
-          </div>
-        </div>
-
-        <div className="mt-fib-3 rounded-2xl bg-surface-soft p-fib-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-eyebrow uppercase text-text-muted">Votre référence</p>
-              <p className="mt-0.5 font-mono text-lg font-semibold tracking-wide text-ink">
-                {confirmation.reference}
-              </p>
-            </div>
-            <div className="text-end">
-              <p className="text-eyebrow uppercase text-text-muted">Total à payer</p>
-              <p className="mt-0.5 text-lg font-semibold text-ink">
-                {formatMAD(confirmation.total)}
-              </p>
-            </div>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-text-muted">
-            Gardez cette référence : elle suffit, avec votre téléphone, pour suivre la commande.
-            Paiement en espèces à la réception.
-          </p>
-        </div>
-
-        <div className="mt-fib-3">
-          <OrderTimeline status="en_attente" />
-        </div>
-
-        <p className="mt-fib-3 text-sm leading-relaxed text-text-muted">
-          Nous vous appelons au{' '}
-          <strong className="text-ink">{formatMoroccanPhone(confirmation.phone)}</strong> pour
-          confirmer l’adresse. Vous pouvez aussi nous envoyer le récapitulatif sur WhatsApp.
-        </p>
-
-        <div className="mt-fib-3 flex flex-col gap-2 sm:flex-row">
-          <a
-            href={`https://wa.me/${whatsappNumber(settings.whatsappPhone)}?text=${whatsappText}`}
-            target="_blank"
-            rel="noreferrer"
-            className="press inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-medium text-white hover:bg-primary-light"
-          >
-            <MessageCircle size={16} />
-            Envoyer sur WhatsApp
-          </a>
-          <Link
-            href="/suivre"
-            className="press inline-flex h-12 items-center justify-center rounded-full border border-hairline px-6 text-sm font-medium text-ink hover:bg-surface-soft"
-          >
-            Suivre ma commande
-          </Link>
-          <Link
-            href="/boutique"
-            className="press inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-medium text-text-muted hover:text-ink"
-          >
-            Continuer mes achats
-          </Link>
-        </div>
-      </section>
-    )
   }
 
   if (items.length === 0) {

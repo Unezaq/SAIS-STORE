@@ -3,13 +3,10 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
-import { ProductActions } from '@/components/storefront/ProductActions'
-import { ProductGallery } from '@/components/storefront/ProductGallery'
+import { ProductMediaAndActions } from '@/components/storefront/ProductMediaAndActions'
 import { getGalleryImages } from '@/lib/gallery'
-import { Badge } from '@/components/ui/Badge'
 import { JsonLd, productJsonLd, breadcrumbJsonLd } from '@/lib/seo'
 import { getSettings, getStorefrontProduct, getStorefrontProducts } from '@/lib/products'
-import { categories } from '@/lib/data'
 import { formatMAD } from '@/lib/utils'
 
 export async function generateMetadata({
@@ -78,104 +75,67 @@ export default async function ProductPage({
         ])}
       />
       <section className="mx-auto w-full max-w-7xl px-fib-3 pt-fib-3 md:px-fib-4 md:pt-fib-4">
-        <div className="gap-8 md:gap-12 lg:grid lg:grid-cols-12">
-          {/* Gallery */}
-          <div className="relative lg:col-span-6">
-            <ProductGallery
-              images={[
-                product.imageUrl,
-                ...Object.values(product.colorImages ?? {}).filter(
-                  (src) => src !== product.imageUrl
-                ),
-                ...getGalleryImages(product.slug),
-              ]}
-              alt={product.title}
-              colorImages={product.colorImages}
-            />
-            {product.badge && (
-              <div className="absolute top-4 start-4 z-20">
-                <Badge variant="primary" size="sm">
-                  {product.badge}
-                </Badge>
-              </div>
+        {/* Breadcrumbs */}
+        <nav aria-label="Fil d'Ariane" className="mb-fib-3 flex flex-wrap items-center gap-1.5 text-xs text-text-muted">
+          <Link href="/" className="transition-colors hover:text-ink">Accueil</Link>
+          <span aria-hidden className="text-text-muted/50">/</span>
+          <Link href="/boutique" className="transition-colors hover:text-ink">Boutique</Link>
+          <span aria-hidden className="text-text-muted/50">/</span>
+          <Link href={`/collections/${product.slugCategory}`} className="transition-colors hover:text-ink">
+            {product.categoryName}
+          </Link>
+          <span aria-hidden className="text-text-muted/50">/</span>
+          <span className="text-ink font-medium line-clamp-1">{product.title}</span>
+        </nav>
+        <ProductMediaAndActions
+          product={product}
+          images={[
+            product.imageUrl,
+            ...Object.values(product.colorImages ?? {}).filter(
+              (src) => src !== product.imageUrl
+            ),
+            ...getGalleryImages(product.slug),
+          ]}
+          deliveryFee={settings.deliveryFee}
+          freeDeliveryMinItems={settings.freeDeliveryMinItems}
+          whatsappPhone={settings.whatsappPhone}
+        />
+
+        {/* Description + details */}
+        <ScrollReveal variant="fade-up" delay={0.25}>
+          <div className="pt-6 border-t border-border/50">
+            <h3 className="mb-3 text-eyebrow uppercase text-text-muted">
+              Détails de la pièce
+            </h3>
+            <p className="text-sm md:text-base text-text-muted leading-relaxed">
+              {product.description}
+            </p>
+
+            {product.fabric && (
+              <p className="mt-4 text-sm md:text-base text-ink">
+                <span className="font-medium">Matière :</span>{' '}
+                <span className="text-text-muted">{product.fabric}</span>
+              </p>
+            )}
+
+            {product.features && product.features.length > 0 && (
+              <ul className="mt-4 flex flex-col gap-2">
+                {product.features.map((feature) => (
+                  <li
+                    key={feature}
+                    className="flex items-start gap-2.5 text-sm md:text-base text-text-muted"
+                  >
+                    <span
+                      aria-hidden
+                      className="mt-[0.5em] h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                    />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-
-          {/* Details */}
-          <div className="lg:col-span-6 flex flex-col gap-6">
-            <ScrollReveal variant="fade-up" delay={0.05}>
-              <div>
-                <span className="text-eyebrow uppercase text-text-muted">
-                  {product.categoryName}
-                </span>
-                <h1 className="mt-2 mb-3 text-title text-ink">
-                  {product.title}
-                </h1>
-                <div className="flex items-baseline gap-3 md:gap-4 mb-1">
-                  <span className="tabular text-xl font-semibold text-ink md:text-2xl">
-                    {formatMAD(product.price)}
-                  </span>
-                  {product.originalPrice && product.originalPrice > product.price && (
-                    <>
-                      <span className="text-sm text-text-muted/70 line-through">
-                        {formatMAD(product.originalPrice)}
-                      </span>
-                      <span className="text-xs font-bold text-rose-600">
-                        -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {/* Quantity + Actions */}
-            <ScrollReveal variant="fade-up" delay={0.15}>
-              <ProductActions
-                product={product}
-                deliveryFee={settings.deliveryFee}
-                freeDeliveryMinItems={settings.freeDeliveryMinItems}
-                whatsappPhone={settings.whatsappPhone}
-              />
-            </ScrollReveal>
-
-            {/* Description + details */}
-            <ScrollReveal variant="fade-up" delay={0.25}>
-              <div className="pt-6 border-t border-border/50">
-                <h3 className="mb-3 text-eyebrow uppercase text-text-muted">
-                  Détails de la pièce
-                </h3>
-                <p className="text-sm md:text-base text-text-muted leading-relaxed">
-                  {product.description}
-                </p>
-
-                {product.fabric && (
-                  <p className="mt-4 text-sm md:text-base text-ink">
-                    <span className="font-medium">Matière :</span>{' '}
-                    <span className="text-text-muted">{product.fabric}</span>
-                  </p>
-                )}
-
-                {product.features && product.features.length > 0 && (
-                  <ul className="mt-4 flex flex-col gap-2">
-                    {product.features.map((feature) => (
-                      <li
-                        key={feature}
-                        className="flex items-start gap-2.5 text-sm md:text-base text-text-muted"
-                      >
-                        <span
-                          aria-hidden
-                          className="mt-[0.5em] h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                        />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </ScrollReveal>
-          </div>
-        </div>
+        </ScrollReveal>
 
         {/* Related products */}
         <ScrollReveal variant="fade-up" delay={0.35}>

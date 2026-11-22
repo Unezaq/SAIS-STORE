@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ShoppingBag, Search, User, Heart } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
 import { categories } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
@@ -207,7 +208,18 @@ export function TopNav({
             aria-label="Panier d'achats"
           >
             <ShoppingBag size={16} strokeWidth={1.9} />
-            <span className="tabular text-xs font-semibold">{cartCount}</span>
+            <AnimatePresence mode="popLayout">
+              <motion.span
+                key={cartCount}
+                className="tabular text-xs font-semibold"
+                initial={{ scale: 1.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                transition={{ type: 'spring', bounce: 0.4, duration: 0.3 }}
+              >
+                {cartCount}
+              </motion.span>
+            </AnimatePresence>
           </button>
         </div>
       </div>

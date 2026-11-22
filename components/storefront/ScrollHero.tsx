@@ -98,7 +98,7 @@ export function ScrollHero({ posterImageUrl = null }: ScrollHeroProps) {
               muted
               loop
               playsInline
-              preload="auto"
+              preload="metadata"
               aria-hidden
             />
           )}

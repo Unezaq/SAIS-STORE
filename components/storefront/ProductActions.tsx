@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { formatMAD, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { QuantityStepper } from '@/components/ui/QuantityStepper'
 import { useCart } from '@/components/storefront/CartProvider'
-import { clientEnv } from '@/lib/env'
+import { useToast } from '@/components/ui/Toast'
 
-interface ProductColor {
+export interface ProductColor {
   name: string
   hex: string
 }
@@ -15,7 +15,8 @@ interface ProductColor {
 interface ProductActionsProps {
   deliveryFee: number
   freeDeliveryMinItems: number
-  whatsappPhone: string
+  /** Optional callback so the parent can synchronize the product gallery when a color is selected. */
+  onColorChange?: (color: string | null) => void
   product: {
     slug: string
     title: string
@@ -33,25 +34,42 @@ export function ProductActions({
   product,
   deliveryFee,
   freeDeliveryMinItems,
-  whatsappPhone,
+  onColorChange,
 }: ProductActionsProps) {
   const [quantity, setQuantity] = useState(1)
   const [size, setSize] = useState<string | null>(product.sizes?.[0] ?? null)
   const [color, setColor] = useState<string | null>(product.colors?.[0]?.name ?? null)
   const [added, setAdded] = useState(false)
+  const [pending, setPending] = useState(false)
   const { addItem } = useCart()
+  const { show } = useToast()
 
-  const productUrl = new URL(
-    `/products/${encodeURIComponent(product.slug)}`,
-    clientEnv.NEXT_PUBLIC_SITE_URL
-  ).toString()
-  const imageUrl = new URL(product.imageUrl, clientEnv.NEXT_PUBLIC_SITE_URL).toString()
-  const message = encodeURIComponent(
-    `Bonjour SAIS 👋\nJe souhaite commander ce produit :\n\n${product.title}\n${
-      product.ref ? `Réf. : ${product.ref}\n` : ''
-    }${color ? `Couleur : ${color}\n` : ''}${size ? `Taille : ${size}\n` : ''}Prix unitaire : ${formatMAD(product.price)}\nQuantité : ${quantity}\n\nPhoto : ${imageUrl}\nFiche produit : ${productUrl}\nMerci !`
+  const handleAddToCart = useCallback(() => {
+    setPending(true)
+    addItem({
+      slug: product.slug,
+      title: product.title,
+      imageUrl: product.imageUrl,
+      price: product.price,
+      quantity,
+      size: size ?? undefined,
+      color: color ?? undefined,
+    })
+    setAdded(true)
+    show('success', 'Ajouté au panier.', 'Votre pièce a été ajoutée au panier.')
+    setTimeout(() => {
+      setAdded(false)
+      setPending(false)
+    }, 1200)
+  }, [addItem, show, product, quantity, size, color])
+
+  const handleColorChange = useCallback(
+    (nextColor: string | null) => {
+      setColor(nextColor)
+      onColorChange?.(nextColor)
+    },
+    [onColorChange]
   )
-  const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${message}`
 
   return (
     <div className="flex flex-col gap-5">
@@ -65,18 +83,7 @@ export function ProductActions({
               <button
                 key={c.name}
                 type="button"
-                onClick={() => {
-                  setColor(c.name)
-                  // Swap the gallery photo when we have one for this color.
-                  const target = product.colorImages?.[c.name]
-                  if (target) {
-                    const base = target.split('/').pop()
-                    const thumb = [...document.querySelectorAll('button img')].find(
-                      (img) => (img.getAttribute('src') || '').includes(encodeURIComponent(base ?? ''))
-                    )
-                    ;(thumb?.closest('button') as HTMLButtonElement | null)?.click()
-                  }
-                }}
+                onClick={() => handleColorChange(c.name)}
                 aria-pressed={color === c.name}
                 aria-label={c.name}
                 title={c.name}
@@ -143,35 +150,15 @@ export function ProductActions({
           <QuantityStepper value={quantity} onChange={setQuantity} min={1} max={10} size="md" />
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full">
-          <a
-            href={whatsappUrl}
-            rel="noreferrer"
-            target="_blank"
-            className="w-full sm:w-auto"
-          >
-            <Button size="lg" variant="secondary" className="w-full">
-              Commander via WhatsApp
-            </Button>
-          </a>
           <Button
             type="button"
             size="lg"
             variant="outline"
             className="w-full sm:w-auto"
-            onClick={() => {
-              addItem({
-                slug: product.slug,
-                title: product.title,
-                imageUrl: product.imageUrl,
-                price: product.price,
-                quantity,
-                size: size ?? undefined,
-                color: color ?? undefined,
-              })
-              setAdded(true)
-            }}
+            disabled={pending}
+            onClick={handleAddToCart}
           >
-            Ajouter au panier
+            {pending ? 'Ajout en cours…' : 'Ajouter au panier'}
           </Button>
         </div>
       </div>

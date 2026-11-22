@@ -11,14 +11,32 @@ export interface ProductGalleryProps {
   alt: string
   /** Optional map of color name -> image src, used to sync with color chips. */
   colorImages?: Record<string, string>
+  /** Controlled selection index. When provided, the parent owns gallery state. */
+  selectedIndex?: number
+  /** Callback fired when a thumbnail is selected. Required when selectedIndex is set. */
+  onSelect?: (index: number) => void
 }
 
 /**
  * Main photo with a thumbnail rail underneath. The thumbs swap the hero image
  * in place — no lightbox, keeps the buy flow one gesture away.
+ *
+ * Supports both uncontrolled (internal state) and controlled (parent-owned)
+ * selection. In controlled mode the parent drives which image is shown, which
+ * lets color chips outside this component synchronize the gallery without DOM
+ * manipulation.
  */
-export function ProductGallery({ images, alt, colorImages }: ProductGalleryProps) {
-  const [selected, setSelected] = useState(0)
+export function ProductGallery({
+  images,
+  alt,
+  colorImages,
+  selectedIndex,
+  onSelect,
+}: ProductGalleryProps) {
+  const [internalSelected, setInternalSelected] = useState(0)
+
+  // The effective selected index: controlled prop takes precedence.
+  const selected = selectedIndex ?? internalSelected
 
   // Map color name -> index in the images array, so color chips can drive the
   // main photo. Rebuilt whenever the image set changes.
@@ -31,6 +49,14 @@ export function ProductGallery({ images, alt, colorImages }: ProductGalleryProps
     }
     return map
   }, [images, colorImages])
+
+  const handleSelect = (index: number) => {
+    if (onSelect) {
+      onSelect(index)
+    } else {
+      setInternalSelected(index)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -52,7 +78,7 @@ export function ProductGallery({ images, alt, colorImages }: ProductGalleryProps
             <button
               key={src}
               type="button"
-              onClick={() => setSelected(index)}
+              onClick={() => handleSelect(index)}
               aria-label={`Photo ${index + 1}`}
               aria-pressed={selected === index}
               className={cn(

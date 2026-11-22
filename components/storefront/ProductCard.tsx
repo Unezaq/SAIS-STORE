@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Plus, Heart } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { useToast } from '@/components/ui/Toast'
 import { formatMAD, cn } from '@/lib/utils'
 
 export interface ProductCardProps {
@@ -46,6 +47,7 @@ export function ProductCard({
   const [localLiked, setLocalLiked] = React.useState(isLiked)
   // When the parent drives the state (wishlist), its prop is the source of truth.
   const liked = onToggleLike ? isLiked : localLiked
+  const { show } = useToast()
 
   // Negative delay desynchronises the Ken Burns loop between neighbouring
   // cards, so the grid breathes like a mosaic of clips instead of marching.
@@ -110,8 +112,14 @@ export function ProductCard({
   const handleLike = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!onToggleLike) setLocalLiked(!localLiked)
+    const willLike = !liked
+    if (!onToggleLike) setLocalLiked(willLike)
     onToggleLike?.(id)
+    show(
+      'success',
+      willLike ? 'Ajouté aux favoris.' : 'Retiré des favoris.',
+      willLike ? 'Retrouvez cette pièce dans vos favoris.' : undefined
+    )
   }
 
   const handleQuickAdd = (e: React.MouseEvent) => {

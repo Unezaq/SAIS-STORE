@@ -48,12 +48,60 @@ const rows = store.products.map((product) => ({
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
-const { error } = await supabase
+const { data: importedProducts, error: productError } = await supabase
   .from('products')
   .upsert(rows, { onConflict: 'slug' })
+  .select('id, slug')
 
-if (error) throw error
+if (productError) throw productError
+if (!importedProducts || importedProducts.length !== rows.length) {
+  throw new Error('Could not retrieve all imported product IDs to seed their variants.')
+}
+
+const productIds = importedProducts.map((product) => product.id)
+const { data: existingVariants, error: variantsReadError } = await supabase
+  .from('product_variants')
+  .select('product_id, size, color')
+  .in('product_id', productIds)
+
+if (variantsReadError) throw variantsReadError
+
+const existingVariantKeys = new Set(
+  (existingVariants ?? []).map(
+    (variant) => `${variant.product_id}\u0000${variant.size ?? ''}\u0000${variant.color ?? ''}`
+  )
+)
+const productsBySlug = new Map(store.products.map((product) => [product.slug, product]))
+const variants = importedProducts.flatMap((importedProduct) => {
+  const product = productsBySlug.get(importedProduct.slug)
+  if (!product) throw new Error(`Could not find source data for ${importedProduct.slug}.`)
+
+  const sizes = product.sizes ?? ['S', 'M', 'L', 'XL', 'XXL']
+  const colors = (product.colors ?? []).map((color) => color.name)
+
+  return sizes.flatMap((size) =>
+    colors.map((color) => ({
+      product_id: importedProduct.id,
+      size,
+      color,
+      stock: 25,
+      price_adjustment: 0,
+    }))
+  )
+})
+const missingVariants = variants.filter(
+  (variant) =>
+    !existingVariantKeys.has(`${variant.product_id}\u0000${variant.size}\u0000${variant.color}`)
+)
+
+if (missingVariants.length > 0) {
+  const { error: variantsInsertError } = await supabase
+    .from('product_variants')
+    .insert(missingVariants)
+
+  if (variantsInsertError) throw variantsInsertError
+}
 
 console.log(
-  `Imported ${rows.length} products into Supabase project ${new URL(supabaseUrl).host}.`
+  `Imported ${rows.length} products and added ${missingVariants.length} missing variants into Supabase project ${new URL(supabaseUrl).host}.`
 )

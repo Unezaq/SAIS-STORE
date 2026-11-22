@@ -12,6 +12,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/boutique`, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${base}/promotions`, changeFrequency: 'daily', priority: 0.8 },
     { url: `${base}/espace-client`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${base}/contact`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/faq`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/livraison`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/retours`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${base}/confidentialite`, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${base}/conditions`, changeFrequency: 'yearly', priority: 0.3 },
     { url: `${base}/collections`, changeFrequency: 'weekly', priority: 0.6 },
     { url: `${base}/wishlist`, changeFrequency: 'monthly', priority: 0.3 },
   ]

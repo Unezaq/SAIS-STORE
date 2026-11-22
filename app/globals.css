@@ -79,7 +79,6 @@ body {
   font-family: var(--font-sans);
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
 }
 
 body {
@@ -252,7 +251,6 @@ p {
 
 .animate-kenburns-card {
   animation: kenburns-card 12s ease-in-out infinite;
-  will-change: transform;
 }
 
 /* Pause the card motion when the user points at the card or prefers stillness. */

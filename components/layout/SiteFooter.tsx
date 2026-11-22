@@ -26,6 +26,12 @@ export function SiteFooter({
     { label: 'Nouveautés', href: '/collections/nouveautes' },
     { label: 'Espace client', href: '/espace-client' },
     { label: 'Suivre ma commande', href: '/suivre' },
+    { label: 'Contact', href: '/contact' },
+    { label: 'FAQ', href: '/faq' },
+    { label: 'Livraison', href: '/livraison' },
+    { label: 'Retours et échanges', href: '/retours' },
+    { label: 'Confidentialité', href: '/confidentialite' },
+    { label: 'Conditions de vente', href: '/conditions' },
     { label: 'Nous écrire', href: `https://wa.me/${whatsappPhone}` },
   ]
 

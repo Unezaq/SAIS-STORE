@@ -111,6 +111,7 @@ describe('order creation', () => {
   })
 
   it('calls the RPC for order creation', async () => {
+    const rpcSpy = vi.spyOn(supabaseMock, 'rpc')
     const result = await createOrder(
       { ...baseOrderInput, clientEmail: undefined, clientName: undefined },
       null,
@@ -119,6 +120,12 @@ describe('order creation', () => {
     )
 
     expect(result.id).toBeDefined()
+    expect(rpcSpy).toHaveBeenCalledWith(
+      'place_order_rpc',
+      expect.objectContaining({
+        p_items: [{ slug: 'pyjama-polaires', color: 'Bleu', size: 'M', quantity: 2 }],
+      })
+    )
   })
 
   it('calculates free delivery when min items reached', async () => {

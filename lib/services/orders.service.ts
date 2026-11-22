@@ -65,14 +65,12 @@ export async function createOrder(
 ): Promise<StoreOrder> {
   const supabase = createAdminClient()
 
-  const itemsJson = JSON.stringify(
-    order.items.map((item) => ({
-      slug: item.slug,
-      color: item.color ?? null,
-      size: item.size ?? null,
-      quantity: item.quantity,
-    }))
-  )
+  const items = order.items.map((item) => ({
+    slug: item.slug,
+    color: item.color ?? null,
+    size: item.size ?? null,
+    quantity: item.quantity,
+  }))
 
   const { data, error } = await supabase.rpc('place_order_rpc', {
     p_auth_user_id: authUserId,
@@ -83,7 +81,7 @@ export async function createOrder(
     p_phone: order.phone,
     p_address: order.address,
     p_city: order.city || 'Casablanca',
-    p_items: itemsJson,
+    p_items: items,
     p_note: order.note ?? null,
     p_coupon_code: options.couponCode ?? null,
     p_idempotency_key: options.idempotencyKey ?? null,
