@@ -80,18 +80,6 @@ export interface StoreCoupon {
   updatedAt: string
 }
 
-export interface StoreAddress {
-  id: string
-  label: string
-  fullName: string
-  phone: string
-  city: string
-  address: string
-  isDefault: boolean
-  createdAt: string
-  updatedAt: string
-}
-
 export interface StoreProductVariant {
   id: string
   productId: string

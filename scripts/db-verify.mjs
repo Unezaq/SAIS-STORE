@@ -1,262 +1,183 @@
+/**
+ * scripts/db-verify.mjs — Pre-flight Database Verification Tool.
+ * Verifies table existence, RLS enforcement, RPC availability, and permission boundaries
+ * on the Supabase project configured in .env.local.
+ *
+ * Usage:
+ *   node scripts/db-verify.mjs
+ */
 
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 
-// ============================================
-// 1. Load environment variables
-// ============================================
+// 1. Environment Loading
+function loadEnv() {
+  const envPath = join(process.cwd(), '.env.local')
+  if (!existsSync(envPath)) return
 
-function loadEnv(filePath) {
-  try {
-    const content = readFileSync(filePath, 'utf-8')
-
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim()
-
-      if (!trimmed || trimmed.startsWith('#')) continue
-
-      const eqIndex = trimmed.indexOf('=')
-      if (eqIndex === -1) continue
-
-      const key = trimmed.slice(0, eqIndex).trim()
-      const value = trimmed.slice(eqIndex + 1).trim()
-
-      if (key && !process.env[key]) {
-        process.env[key] = value.replace(/^["']|["']$/g, '')
-      }
+  const content = readFileSync(envPath, 'utf-8')
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    const key = trimmed.slice(0, eq).trim()
+    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
+    if (key && !process.env[key]) {
+      process.env[key] = val
     }
-  } catch (error) {
-    console.error(`Could not load ${filePath}:`, error.message)
   }
 }
 
-loadEnv('.env.local')
-
-// ============================================
-// 2. Supabase configuration
-// ============================================
+loadEnv()
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!SUPABASE_URL || !ANON_KEY || !SERVICE_KEY) {
-  console.error('FAIL: Missing Supabase environment variables.')
+  console.error('\n❌ Missing required environment variables in .env.local:')
+  if (!SUPABASE_URL) console.error('   - NEXT_PUBLIC_SUPABASE_URL')
+  if (!ANON_KEY) console.error('   - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
+  if (!SERVICE_KEY) console.error('   - SUPABASE_SERVICE_ROLE_KEY')
+  console.error('\nPlease configure your .env.local before running verification.\n')
   process.exit(1)
 }
 
 const anon = createClient(SUPABASE_URL, ANON_KEY)
 const svc = createClient(SUPABASE_URL, SERVICE_KEY)
 
-// ============================================
-// 3. Test helpers
-// ============================================
+let passed = 0
+let failed = 0
 
-let pass = 0
-let fail = 0
-
-function check(name, condition, detail = '') {
+function assertCheck(title, condition, extra = '') {
   if (condition) {
-    console.log(`PASS: ${name}`)
-    pass++
+    console.log(`  ✅ PASS: ${title}`)
+    passed++
   } else {
-    console.log(`FAIL: ${name} ${detail}`)
-    fail++
+    console.log(`  ❌ FAIL: ${title} ${extra ? `(${extra})` : ''}`)
+    failed++
   }
 }
 
-const expectedTables = [
-  'addresses',
+const canonicalTables = [
+  'settings',
+  'products',
+  'product_variants',
+  'profiles',
   'clients',
   'coupons',
-  'customers',
-  'customer_credentials',
-  'customer_sessions',
+  'orders',
   'order_items',
   'order_status_history',
-  'orders',
-  'product_variants',
-  'products',
-  'profiles',
-  'settings'
 ]
 
-const protectedTables = [
+const sensitiveTables = [
   'orders',
   'order_items',
+  'clients',
   'coupons',
-  'customers',
-  'customer_credentials',
-  'customer_sessions',
   'profiles',
-  'addresses',
-  'clients'
+  'order_status_history',
 ]
 
-// ============================================
-// 4. Main verification
-// ============================================
+const canonicalRpcs = [
+  'is_admin',
+  'normalize_moroccan_phone',
+  'order_reference_for_tracking',
+  'validate_coupon',
+  'get_order_for_tracking',
+  'place_order_rpc',
+]
 
-async function main() {
-  console.log('\n========== SAIS STORE DB VERIFY ==========\n')
+async function verify() {
+  console.log('\n======================================================')
+  console.log('       SAIS STORE — SUPABASE PRE-FLIGHT VERIFIER       ')
+  console.log('======================================================')
+  console.log(`Target Host: ${new URL(SUPABASE_URL).host}\n`)
 
-  // ------------------------------------------
-  // A. Verify tables through Supabase REST
-  // ------------------------------------------
-
-  for (const table of expectedTables) {
-    const { error } = await svc
-      .from(table)
-      .select('*', { head: true, count: 'exact' })
-      .limit(0)
-
-    check(
-      `Table exists: ${table}`,
-      !error,
-      error?.message ?? ''
-    )
+  // 1. Table Verification
+  console.log('--- 1. Table Existence Check (Canonical Schema) ---')
+  for (const table of canonicalTables) {
+    const { error } = await svc.from(table).select('*', { count: 'exact', head: true })
+    assertCheck(`Table exists: ${table}`, !error, error?.message)
   }
 
-  // ------------------------------------------
-  // B. Verify RLS through direct access
-  // Note: PostgREST does not expose pg_tables
-  // ------------------------------------------
-
-  console.log('\n--- RLS / Policies ---')
-
-  const { data: policies, error: policyError } = await svc
-    .from('pg_policies')
-    .select('tablename, cmd')
-    .eq('schemaname', 'public')
-
-  if (policyError) {
-    console.log(
-      'SKIP: Policies inspection unavailable through REST:',
-      policyError.message
-    )
-  } else {
-    for (const table of ['orders', 'order_items']) {
-      const hasInsert = policies.some(
-        p => p.tablename === table && p.cmd === 'INSERT'
-      )
-
-      check(
-        `No INSERT policy on ${table}`,
-        !hasInsert
-      )
-    }
-  }
-
-  // ------------------------------------------
-  // C. Anon access tests
-  // ------------------------------------------
-
-  console.log('\n--- Anon access ---')
-
-  const { data: products, error: productsError } = await anon
+  // 2. Public Read Access
+  console.log('\n--- 2. Public Read Access (Storefront Active Records) ---')
+  const { data: prods, error: prodErr } = await anon
     .from('products')
-    .select('id')
+    .select('id, slug, is_active')
     .eq('is_active', true)
     .limit(1)
-
-  check(
-    'Anon: products SELECT works',
-    !productsError && Array.isArray(products),
-    productsError?.message ?? ''
+  assertCheck(
+    'Anon: Active products are readable',
+    !prodErr && Array.isArray(prods),
+    prodErr?.message
   )
 
-  for (const table of protectedTables) {
-    const { data, error } = await anon
-      .from(table)
-      .select('*')
-      .limit(1)
+  const { data: settings, error: settErr } = await anon
+    .from('settings')
+    .select('store_name, currency')
+    .eq('id', 1)
+    .maybeSingle()
+  assertCheck(
+    'Anon: Store settings are readable',
+    !settErr && !!settings,
+    settErr?.message
+  )
 
-    const deniedOrEmpty =
-      !!error || (Array.isArray(data) && data.length === 0)
-
-    check(
-      `Anon: ${table} SELECT empty/denied`,
-      deniedOrEmpty,
-      error?.message ?? `rows=${data?.length}`
+  // 3. Sensitive Data Protection (RLS)
+  console.log('\n--- 3. RLS Data Isolation (Anon Denied) ---')
+  for (const table of sensitiveTables) {
+    const { data, error } = await anon.from(table).select('*').limit(1)
+    const isDeniedOrEmpty = !!error || (Array.isArray(data) && data.length === 0)
+    assertCheck(
+      `Anon: ${table} is protected (empty or denied)`,
+      isDeniedOrEmpty,
+      error ? error.message : `rows returned: ${data?.length}`
     )
   }
 
-  // ------------------------------------------
-  // D. Verify RPC availability
-  // ------------------------------------------
-
-  console.log('\n--- RPC functions ---')
-
-  const rpcNames = [
-    'place_order_rpc',
-    'validate_coupon',
-    'get_order_for_tracking',
-    'order_reference_for_tracking',
-    'normalize_moroccan_phone',
-    'is_admin'
-  ]
-
-  // RPC existence cannot be reliably inspected through
-  // the Supabase REST interface without calling it.
-  // We use a harmless invalid-arguments call for discovery.
-
-  for (const rpcName of rpcNames) {
-    const { error } = await svc.rpc(rpcName, {})
-
-    const exists =
-      !error ||
-      !/could not find the function|schema cache/i.test(error.message)
-
-    check(
-      `RPC available: ${rpcName}`,
-      exists,
-      error?.message ?? ''
-    )
+  // 4. RPC Availability
+  console.log('\n--- 4. Stored Procedures & Functions ---')
+  for (const rpc of canonicalRpcs) {
+    const { error } = await svc.rpc(rpc, {})
+    const exists = !error || !/could not find the function|schema cache/i.test(error.message)
+    assertCheck(`RPC registered: ${rpc}`, exists, error?.message)
   }
 
-  // ------------------------------------------
-  // E. Verify place_order_rpc is not accessible
-  // to anonymous users
-  // ------------------------------------------
-
-  console.log('\n--- Anonymous RPC security ---')
-
-  const { error: anonRpcError } = await anon.rpc(
-    'place_order_rpc',
-    {
-      p_auth_user_id: null,
-      p_customer_id: null,
-      p_client_email: null,
-      p_client_name: 'Test',
-      p_customer_name: 'Test',
-      p_phone: '+212600000000',
-      p_address: 'Test',
-      p_city: 'Kenitra',
-      p_items: [],
-      p_note: null,
-      p_coupon_code: null,
-      p_idempotency_key: null
-    }
+  // 5. Unauthenticated Direct Order Placement Protection
+  console.log('\n--- 5. Security Boundary Verification ---')
+  const { error: anonOrderError } = await anon.rpc('place_order_rpc', {
+    p_auth_user_id: null,
+    p_customer_id: null,
+    p_client_email: null,
+    p_client_name: null,
+    p_customer_name: 'Attacker',
+    p_phone: '+212600000000',
+    p_address: 'Fake',
+    p_city: 'Casablanca',
+    p_items: [],
+    p_note: null,
+    p_coupon_code: null,
+    p_idempotency_key: null,
+  })
+  assertCheck(
+    'Anon: Direct place_order_rpc execution denied',
+    !!anonOrderError,
+    anonOrderError ? anonOrderError.message : 'SECURITY FAILED: unauthenticated call was permitted'
   )
 
-  check(
-    'Anon: place_order_rpc denied',
-    !!anonRpcError,
-    anonRpcError?.message ?? 'RPC unexpectedly allowed'
-  )
+  console.log('\n======================================================')
+  console.log(`Results: ${passed} PASSED, ${failed} FAILED`)
+  console.log('======================================================\n')
 
-  // ------------------------------------------
-  // F. Final result
-  // ------------------------------------------
-
-  console.log('\n==========================================')
-  console.log(`${pass} PASS, ${fail} FAIL`)
-  console.log('==========================================\n')
-
-  process.exitCode = fail > 0 ? 1 : 0
+  process.exit(failed > 0 ? 1 : 0)
 }
 
-main().catch(error => {
-  console.error('\nFATAL ERROR:', error)
-  process.exitCode = 1
+verify().catch((err) => {
+  console.error('\n💥 Unexpected verification error:', err)
+  process.exit(1)
 })

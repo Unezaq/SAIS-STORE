@@ -1,6 +1,6 @@
 /**
- * lib/products.ts — Point d'entrée unique pour les données.
- * Toutes les fonctions délèguent à lib/store.ts, lib/coupons.ts et lib/addresses.ts.
+ * lib/products.ts — Storefront Data Facade.
+ * Re-exports domain queries and adds storefront-specific pricing logic.
  */
 
 export {
@@ -12,14 +12,11 @@ export {
   upsertProduct,
   deleteProduct,
   getOrders,
-  getOrdersByAuthUserId,
   updateOrderStatus,
   getOrderByToken,
   getOrderDetail,
   getClients,
   getAdminClients,
-  getClientByAuthUserId,
-  ensureClientProfile,
   createOrder,
   getSettings,
   updateSettings,
@@ -33,41 +30,25 @@ export {
   validateCoupon,
 } from './coupons'
 
-export {
-  getAddresses,
-  upsertAddress,
-  deleteAddress,
-  getDefaultAddress,
-  getAdminAddresses,
-} from './addresses'
-
 import {
   getProduct,
   getProducts,
   getProductsByCategory,
-  getPromoProducts,
   getSettings,
 } from './store'
 import { applyStorePrice } from './pricing'
 import type { Product } from './data'
-import type {
-  StoreOrder,
-  StoreClient,
-  StoreSettings,
-} from './types/store'
 
 export type {
   StoreOrder,
   StoreClient,
   StoreSettings,
   StoreCoupon,
-  StoreAddress,
   StoreProductVariant,
   CouponValidationResult,
 } from './types/store'
 
 export type { Product } from './data'
-
 export { discountPercent } from './data'
 
 export async function getStorefrontProducts(): Promise<Product[]> {

@@ -37,8 +37,12 @@ export function getStorePrice(
   )
 }
 
-export function applyStorePrice(product: Product, settings: StoreSettings): Product {
-  const price = getStorePrice(product, settings)
+export function applyStorePrice(
+  product: Product,
+  settings: StoreSettings,
+  now = new Date()
+): Product {
+  const price = getStorePrice(product, settings, now)
   return price < product.price
     ? { ...product, originalPrice: product.price, price }
     : product
