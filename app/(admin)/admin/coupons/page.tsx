@@ -4,6 +4,18 @@ import { deleteCouponActionAdmin, toggleCouponActionAdmin } from '@/actions/admi
 import { getCoupons } from '@/lib/products'
 import { formatMAD } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
+async function handleToggleCoupon(formData: FormData) {
+  'use server'
+  await toggleCouponActionAdmin(formData)
+}
+
+async function handleDeleteCoupon(formData: FormData) {
+  'use server'
+  await deleteCouponActionAdmin(formData)
+}
+
 export default async function AdminCouponsPage() {
   const coupons = await getCoupons()
 
@@ -66,12 +78,7 @@ export default async function AdminCouponsPage() {
                     {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('fr-MA') : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <form
-                      action={async (formData: FormData) => {
-                        'use server'
-                        await toggleCouponActionAdmin(formData)
-                      }}
-                    >
+                    <form action={handleToggleCoupon}>
                       <input type="hidden" name="id" value={c.id} />
                       <input type="hidden" name="isActive" value={String(!c.isActive)} />
                       <button
@@ -105,12 +112,7 @@ export default async function AdminCouponsPage() {
                       >
                         <Pencil size={15} />
                       </Link>
-                      <form
-                        action={async (formData: FormData) => {
-                          'use server'
-                          await deleteCouponActionAdmin(formData)
-                        }}
-                      >
+                      <form action={handleDeleteCoupon}>
                         <input type="hidden" name="id" value={c.id} />
                         <button
                           type="submit"
