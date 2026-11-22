@@ -83,12 +83,12 @@ const sensitiveTables = [
 ]
 
 const canonicalRpcs = [
-  'is_admin',
-  'normalize_moroccan_phone',
-  'order_reference_for_tracking',
-  'validate_coupon',
-  'get_order_for_tracking',
-  'place_order_rpc',
+  { name: 'is_admin', params: {} },
+  { name: 'normalize_moroccan_phone', params: { p_value: '+212600000000' } },
+  { name: 'order_reference_for_tracking', params: { p_order_id: 'ord-test-123' } },
+  { name: 'validate_coupon', params: { p_code: 'sais10', p_subtotal: 300 } },
+  { name: 'get_order_for_tracking', params: { p_order_number: 'SAIS-00000000', p_phone: '+212600000000' } },
+  { name: 'place_order_rpc', params: {} },
 ]
 
 async function verify() {
@@ -143,9 +143,9 @@ async function verify() {
   // 4. RPC Availability
   console.log('\n--- 4. Stored Procedures & Functions ---')
   for (const rpc of canonicalRpcs) {
-    const { error } = await svc.rpc(rpc, {})
+    const { error } = await svc.rpc(rpc.name, rpc.params)
     const exists = !error || !/could not find the function|schema cache/i.test(error.message)
-    assertCheck(`RPC registered: ${rpc}`, exists, error?.message)
+    assertCheck(`RPC registered: ${rpc.name}`, exists, error?.message)
   }
 
   // 5. Unauthenticated Direct Order Placement Protection
