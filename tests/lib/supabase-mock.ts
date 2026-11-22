@@ -233,6 +233,103 @@ export class SupabaseMock {
   rpc(funcName: string, params: any) {
     return {
       then: async (resolve: (val: { data: any[] | null; error: any }) => void) => {
+        if (funcName === 'validate_coupon') {
+          const code = (params?.p_code || '').trim().toLowerCase()
+          const subtotal = Number(params?.p_subtotal || 0)
+          const coupons = this.getTable('coupons')
+          const coupon = coupons.find((c: any) => c.code.toLowerCase() === code)
+
+          if (!coupon || !coupon.is_active) {
+            resolve({
+              data: [
+                {
+                  valid: false,
+                  discount_amount: 0,
+                  message: 'Ce code de réduction n’existe pas ou n’est plus valide.',
+                },
+              ],
+              error: null,
+            })
+            return
+          }
+
+          if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) {
+            resolve({
+              data: [
+                {
+                  valid: false,
+                  discount_amount: 0,
+                  message: 'Ce code de réduction n’existe pas ou n’est plus valide.',
+                },
+              ],
+              error: null,
+            })
+            return
+          }
+
+          if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+            resolve({
+              data: [
+                {
+                  valid: false,
+                  discount_amount: 0,
+                  message: 'Ce code de réduction n’existe pas ou n’est plus valide.',
+                },
+              ],
+              error: null,
+            })
+            return
+          }
+
+          if (coupon.max_uses != null && (coupon.used_count ?? 0) >= coupon.max_uses) {
+            resolve({
+              data: [
+                {
+                  valid: false,
+                  discount_amount: 0,
+                  message: 'Ce code de réduction n’existe pas ou n’est plus valide.',
+                },
+              ],
+              error: null,
+            })
+            return
+          }
+
+          if (subtotal < (coupon.min_order ?? 0)) {
+            resolve({
+              data: [
+                {
+                  valid: false,
+                  discount_amount: 0,
+                  message: `Ce code s’applique uniquement à partir de ${coupon.min_order} MAD.`,
+                },
+              ],
+              error: null,
+            })
+            return
+          }
+
+          let discount = 0
+          if (coupon.type === 'percentage') {
+            discount = Math.floor((subtotal * coupon.value) / 100)
+          } else {
+            discount = coupon.value
+          }
+          if (discount > subtotal) discount = subtotal
+
+          resolve({
+            data: [
+              {
+                valid: true,
+                discount_amount: discount,
+                message: 'Réduction appliquée.',
+              },
+            ],
+            error: null,
+          })
+          return
+        }
+
         if (funcName === 'place_order_rpc') {
           let p_items = params.p_items
           if (typeof p_items === 'string') {
@@ -252,6 +349,23 @@ export class SupabaseMock {
             }
           }
 
+          // Handle coupon discount if coupon provided
+          let discountTotal = 0
+          if (params?.p_coupon_code) {
+            const code = String(params.p_coupon_code).trim().toLowerCase()
+            const coupons = this.getTable('coupons')
+            const coupon = coupons.find((c: any) => c.code.toLowerCase() === code)
+            if (coupon && coupon.is_active) {
+              if (coupon.type === 'percentage') {
+                discountTotal = Math.floor((subtotal * coupon.value) / 100)
+              } else {
+                discountTotal = coupon.value
+              }
+              if (discountTotal > subtotal) discountTotal = subtotal
+              coupon.used_count = (coupon.used_count || 0) + 1
+            }
+          }
+
           // Look up delivery settings
           const settings = this.getTable('settings')
           const setting = settings[0] || { delivery_fee: 22, free_delivery_min_items: 0 }
@@ -260,8 +374,8 @@ export class SupabaseMock {
               ? 0
               : setting.delivery_fee
 
-          const total = subtotal + deliveryFee
-          resolve({ data: [{ order_id: 'ord-test-' + Math.random().toString(36).slice(2), order_number: 'SAIS-TEST', tracking_token: 'tok-test', subtotal, discount_total: 0, delivery_fee: deliveryFee, total, status: 'en_attente' }], error: null })
+          const total = Math.max(0, subtotal - discountTotal + deliveryFee)
+          resolve({ data: [{ order_id: 'ord-test-' + Math.random().toString(36).slice(2), order_number: 'SAIS-TEST', tracking_token: 'tok-test', subtotal, discount_total: discountTotal, delivery_fee: deliveryFee, total, status: 'en_attente' }], error: null })
         } else {
           resolve({ data: null, error: new Error(`Unknown RPC: ${funcName}`) })
         }

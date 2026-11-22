@@ -98,7 +98,7 @@ export function SiteFooter({
         </div>
 
         <div className="mt-12 flex flex-col gap-2 border-t border-white/10 pt-6 text-[11px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 SAIS Store — Casablanca, Maroc</p>
+          <p>© 2026 SAIS Store — Kenitra, Maroc</p>
           <p>
             Paiement à la livraison · {deliveryFee > 0 ? `Livraison ${deliveryFee} MAD` : 'Livraison gratuite'}
             {freeDeliveryMinItems > 0 && ` · offerte dès ${freeDeliveryMinItems} pièces`} · 24–48h

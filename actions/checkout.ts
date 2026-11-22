@@ -13,6 +13,7 @@ import {
   validateCoupon,
 } from '@/lib/store'
 import { getStorePrice } from '@/lib/pricing'
+import { checkRateLimit } from '@/lib/security/rateLimit'
 import type { StoreOrder } from '@/lib/types/store'
 
 /**
@@ -72,26 +73,8 @@ export interface TrackedOrder {
   items: StoreOrder['items']
 }
 
-// ---------------------------------------------------------------------------
-// Rate limiting (in-memory, per IP + phone). For production swap for Redis.
-// ---------------------------------------------------------------------------
-const orderRateLimit = new Map<string, { count: number; resetAt: number }>()
-const ORDER_RATE_LIMIT_MAX = 10
-const ORDER_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000 // 1 hour
-
-function checkRateLimit(phone: string): { allowed: boolean; retryAfter?: number } {
-  const now = Date.now()
-  const entry = orderRateLimit.get(phone)
-  if (!entry || now > entry.resetAt) {
-    orderRateLimit.set(phone, { count: 1, resetAt: now + ORDER_RATE_LIMIT_WINDOW_MS })
-    return { allowed: true }
-  }
-  if (entry.count >= ORDER_RATE_LIMIT_MAX) {
-    return { allowed: false, retryAfter: entry.resetAt - now }
-  }
-  entry.count += 1
-  return { allowed: true }
-}
+const ORDER_RATE_LIMIT_OPTIONS = { max: 10, windowMs: 60 * 60 * 1000 } // 1 hour
+const TRACK_RATE_LIMIT_OPTIONS = { max: 20, windowMs: 10 * 60 * 1000 } // 10 minutes
 
 function formString(formData: FormData, key: string): string {
   const value = formData.get(key)
@@ -125,7 +108,7 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
   }
 
   // Rate limit per phone number
-  const rateLimit = checkRateLimit(phone)
+  const rateLimit = checkRateLimit(`order:${phone}`, ORDER_RATE_LIMIT_OPTIONS)
   if (!rateLimit.allowed) {
     const retryMin = Math.ceil((rateLimit.retryAfter ?? 0) / 60000)
     return {
@@ -302,6 +285,16 @@ export async function trackOrderAction(
     return { ok: false, error: 'Ce numéro de téléphone n’est pas un numéro marocain valide.' }
   }
 
+  // Rate limit tracking attempts per phone number
+  const rateLimit = checkRateLimit(`track:${phone}`, TRACK_RATE_LIMIT_OPTIONS)
+  if (!rateLimit.allowed) {
+    const retryMin = Math.ceil((rateLimit.retryAfter ?? 0) / 60000)
+    return {
+      ok: false,
+      error: `Trop de tentatives de suivi. Réessayez dans ${retryMin} minute(s).`,
+    }
+  }
+
   const rawReference = parsed.data.reference.trim().toLowerCase()
   const code = normalizeOrderReference(parsed.data.reference)
   const orders = await getOrdersByPhone(phone)
@@ -367,5 +360,35 @@ export async function trackOrderByToken(
       note: order.note,
       items: order.items,
     },
+  }
+}
+
+/**
+ * Validates a coupon code against a subtotal for live checkout feedback.
+ */
+export async function validateCouponAction(
+  code: string,
+  subtotal: number
+): Promise<{ ok: boolean; discountAmount: number; message: string }> {
+  const trimmed = typeof code === 'string' ? code.trim() : ''
+  if (!trimmed) {
+    return { ok: false, discountAmount: 0, message: 'Code promo requis.' }
+  }
+  if (typeof subtotal !== 'number' || subtotal <= 0) {
+    return { ok: false, discountAmount: 0, message: 'Sous-total invalide.' }
+  }
+  try {
+    const result = await validateCoupon(trimmed, subtotal)
+    return {
+      ok: result.valid,
+      discountAmount: result.discountAmount,
+      message: result.message,
+    }
+  } catch {
+    return {
+      ok: false,
+      discountAmount: 0,
+      message: 'Impossible de vérifier le code promo pour le moment.',
+    }
   }
 }

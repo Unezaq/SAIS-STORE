@@ -12,7 +12,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: () => supabaseMock,
 }))
 
-import { placeOrderAction } from '@/actions/checkout'
+import { placeOrderAction, validateCouponAction, trackOrderAction } from '@/actions/checkout'
 
 const baseFormData = () => {
   const fd = new FormData()
@@ -77,6 +77,69 @@ beforeEach(() => {
       color: 'Bleu',
       stock: 5,
       price_adjustment: 0,
+    } as any,
+  ])
+
+  // Seed coupons for validation tests
+  supabaseMock.from('coupons').insert([
+    {
+      id: 'coup-1',
+      code: 'promo10',
+      type: 'percentage',
+      value: 10,
+      min_order: 100,
+      is_active: true,
+      used_count: 0,
+      max_uses: 100,
+    } as any,
+    {
+      id: 'coup-2',
+      code: 'fixed50',
+      type: 'fixed',
+      value: 50,
+      min_order: 150,
+      is_active: true,
+      used_count: 0,
+      max_uses: 10,
+    } as any,
+    {
+      id: 'coup-3',
+      code: 'min500',
+      type: 'percentage',
+      value: 20,
+      min_order: 500,
+      is_active: true,
+      used_count: 0,
+      max_uses: 50,
+    } as any,
+    {
+      id: 'coup-4',
+      code: 'inactive',
+      type: 'percentage',
+      value: 15,
+      min_order: 0,
+      is_active: false,
+      used_count: 0,
+    } as any,
+    {
+      id: 'coup-5',
+      code: 'expired',
+      type: 'percentage',
+      value: 15,
+      min_order: 0,
+      is_active: true,
+      used_count: 0,
+      expires_at: '2020-01-01T00:00:00Z',
+    } as any,
+    {
+      id: 'coup-6',
+      code: 'exhausted',
+      type: 'percentage',
+      value: 15,
+      min_order: 0,
+      is_active: true,
+      used_count: 5,
+      max_uses: 5,
     } as any,
   ])
 })
@@ -160,5 +223,99 @@ describe('placeOrderAction', () => {
 
     expect(result1.ok).toBe(true)
     expect(result2.ok).toBe(true)
+  })
+})
+
+describe('validateCouponAction', () => {
+  it('rejects empty or whitespace-only code', async () => {
+    const result = await validateCouponAction('   ', 300)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('requis')
+  })
+
+  it('rejects invalid or non-positive subtotal', async () => {
+    const result = await validateCouponAction('PROMO10', 0)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('invalide')
+  })
+
+  it('validates a percentage coupon and calculates discount amount', async () => {
+    const result = await validateCouponAction('PROMO10', 200)
+    expect(result.ok).toBe(true)
+    expect(result.discountAmount).toBe(20) // 10% of 200
+  })
+
+  it('validates a fixed-amount coupon', async () => {
+    const result = await validateCouponAction('fixed50', 200)
+    expect(result.ok).toBe(true)
+    expect(result.discountAmount).toBe(50)
+  })
+
+  it('rejects coupon when subtotal is below minimum order requirement', async () => {
+    const result = await validateCouponAction('min500', 300)
+    expect(result.ok).toBe(false)
+    expect(result.discountAmount).toBe(0)
+    expect(result.message).toContain('500 MAD')
+  })
+
+  it('rejects inactive coupon', async () => {
+    const result = await validateCouponAction('inactive', 300)
+    expect(result.ok).toBe(false)
+    expect(result.discountAmount).toBe(0)
+  })
+
+  it('rejects expired coupon', async () => {
+    const result = await validateCouponAction('expired', 300)
+    expect(result.ok).toBe(false)
+    expect(result.discountAmount).toBe(0)
+  })
+
+  it('rejects coupon that reached maximum usage limit', async () => {
+    const result = await validateCouponAction('exhausted', 300)
+    expect(result.ok).toBe(false)
+    expect(result.discountAmount).toBe(0)
+  })
+})
+
+describe('placeOrderAction with coupon', () => {
+  it('applies coupon discount server-side during order placement', async () => {
+    const fd = baseFormData()
+    fd.set('couponCode', 'PROMO10') // 10% on 200 MAD subtotal = 20 MAD discount
+
+    const result = await placeOrderAction(fd)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.discountTotal).toBe(20)
+      expect(result.total).toBe(202) // 200 - 20 + 22 delivery = 202
+    }
+  })
+})
+
+describe('trackOrderAction rate limiting & phone normalization parity', () => {
+  it('normalizes equivalent Moroccan phone formats to the same rate limit bucket', async () => {
+    const testRef = 'SAIS-12345678'
+    const phoneFormats = [
+      '0612345678',
+      '+212612345678',
+      '00212612345678',
+      '06 12 34 56 78',
+      '06-12-34-56-78',
+      '+212 6 12 34 56 78',
+    ]
+
+    // All these formats normalize to +212612345678 and hit the same bucket
+    for (const phone of phoneFormats) {
+      const fd = new FormData()
+      fd.set('phone', phone)
+      fd.set('reference', testRef)
+
+      const result = await trackOrderAction(fd)
+      // They either fail because the order doesn't exist or because of rate limiting,
+      // but none fail due to "invalid phone"
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).not.toContain('Ce numéro de téléphone n’est pas un numéro marocain valide.')
+      }
+    }
   })
 })

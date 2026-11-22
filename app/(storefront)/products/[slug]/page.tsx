@@ -28,6 +28,8 @@ export async function generateMetadata({
     alternates: { canonical: `/products/${product.slug}` },
     openGraph: {
       type: 'website',
+      locale: 'fr_MA',
+      siteName: 'SAIS Store',
       title: `${product.title} — ${formatMAD(product.price)}`,
       description,
       images: [{ url: product.imageUrl, alt: product.title }],

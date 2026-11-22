@@ -98,6 +98,7 @@ export async function productJsonLd(slug: string): Promise<WithContext<Product> 
     priceCurrency: 'MAD',
     price: product.price,
     availability: 'https://schema.org/InStock',
+    itemCondition: 'https://schema.org/NewCondition',
     areaServed: 'MA',
     url: `${SITE_URL}/products/${product.slug}`,
   }
@@ -109,6 +110,7 @@ export async function productJsonLd(slug: string): Promise<WithContext<Product> 
     description: product.description,
     image: `${SITE_URL}${product.imageUrl}`,
     category: product.categoryName,
+    sku: product.ref || product.slug,
     brand: { '@type': 'Brand', name: SITE_NAME },
     offers: offer,
   }

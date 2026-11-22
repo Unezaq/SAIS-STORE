@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ShieldCheck, Truck } from 'lucide-react'
-import { placeOrderAction } from '@/actions/checkout'
+import { placeOrderAction, validateCouponAction } from '@/actions/checkout'
 import { useCart } from '@/components/storefront/CartProvider'
 import { Button } from '@/components/ui/Button'
 import { formatMoroccanPhone, normalizeMoroccanPhone } from '@/lib/phone'
@@ -48,21 +48,25 @@ export function CheckoutForm({
     settings.freeDeliveryMinItems > 0 && itemCount >= settings.freeDeliveryMinItems
       ? 0
       : settings.deliveryFee
-  const total = subtotal + deliveryFee
 
   const [step, setStep] = React.useState<'delivery' | 'review'>('delivery')
   const [details, setDetails] = React.useState<DeliveryDetails | null>(null)
+  const [discountTotal, setDiscountTotal] = React.useState(0)
+  const [couponFeedback, setCouponFeedback] = React.useState<string | null>(null)
   const [confirmed, setConfirmed] = React.useState(false)
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState('')
   const [idempotencyKey, setIdempotencyKey] = React.useState('')
 
-  function handleDetails(event: React.FormEvent<HTMLFormElement>) {
+  const total = Math.max(0, subtotal - discountTotal + deliveryFee)
+
+  async function handleDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const phone = normalizeMoroccanPhone(String(formData.get('phone') ?? ''))
     const city = String(formData.get('city') ?? '').trim()
     const address = String(formData.get('address') ?? '').trim()
+    const couponCode = String(formData.get('couponCode') ?? '').trim()
 
     if (!phone) {
       setError('Saisissez un numéro marocain valide, par exemple 06 12 34 56 78.')
@@ -78,17 +82,40 @@ export function CheckoutForm({
     }
 
     setError('')
+    setPending(true)
+
+    let discount = 0
+    if (couponCode) {
+      try {
+        const couponRes = await validateCouponAction(couponCode, subtotal)
+        if (couponRes.ok) {
+          discount = couponRes.discountAmount
+          setCouponFeedback(couponRes.message)
+        } else {
+          setError(couponRes.message)
+          setPending(false)
+          return
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    } else {
+      setCouponFeedback(null)
+    }
+
+    setDiscountTotal(discount)
     setDetails({
       customerName: String(formData.get('customerName') ?? '').trim(),
       phone,
       city,
       address,
       clientEmail: String(formData.get('clientEmail') ?? '').trim(),
-      couponCode: String(formData.get('couponCode') ?? '').trim(),
+      couponCode,
       note: String(formData.get('note') ?? '').trim(),
     })
     setConfirmed(false)
     setIdempotencyKey(newIdempotencyKey())
+    setPending(false)
     setStep('review')
     window.scrollTo({ top: 0 })
   }
@@ -301,8 +328,8 @@ export function CheckoutForm({
               </p>
             )}
 
-            <Button type="submit" size="lg" className="mt-6 w-full">
-              Vérifier ma commande
+            <Button type="submit" size="lg" className="mt-6 w-full" disabled={pending} isLoading={pending}>
+              {pending ? 'Vérification…' : 'Vérifier ma commande'}
             </Button>
           </form>
 
@@ -311,7 +338,7 @@ export function CheckoutForm({
             subtotal={subtotal}
             deliveryFee={deliveryFee}
             total={total}
-            discountTotal={0}
+            discountTotal={discountTotal}
             freeDeliveryMinItems={settings.freeDeliveryMinItems}
           />
         </div>
@@ -344,6 +371,14 @@ export function CheckoutForm({
                   { label: 'Adresse', value: details.address },
                   ...(details.clientEmail
                     ? [{ label: 'Email', value: details.clientEmail }]
+                    : []),
+                  ...(details.couponCode
+                    ? [
+                        {
+                          label: 'Code promo',
+                          value: `${details.couponCode.toUpperCase()}${couponFeedback ? ` (${couponFeedback})` : ''}`,
+                        },
+                      ]
                     : []),
                   ...(details.note ? [{ label: 'Note', value: details.note }] : []),
                 ].map((row) => (
@@ -400,7 +435,7 @@ export function CheckoutForm({
             subtotal={subtotal}
             deliveryFee={deliveryFee}
             total={total}
-            discountTotal={0}
+            discountTotal={discountTotal}
             freeDeliveryMinItems={settings.freeDeliveryMinItems}
           />
         </div>

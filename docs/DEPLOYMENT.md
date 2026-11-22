@@ -20,26 +20,25 @@ WhatsApp contact, delivery fee, free-delivery threshold, and temporary storewide
 
 ## Supabase setup
 
-1. For a new project, apply `supabase/seed.sql`. For an existing project, apply `supabase/migrations/20261113_auth_rls.sql` once to add Auth-user links and correct owner policies without deleting rows.
-2. Apply `supabase/migrations/20261113143000_store_offers.sql` to add order subtotal/delivery fields and editable delivery/promotion settings. It is safe to run after the seed script as its columns are guarded with `if not exists`.
-3. To import the starter catalog from `data/store.json`, verify `.env.local` points to the intended Supabase project, then run `pnpm run db:seed-products -- --confirm`. This upserts products by slug; it does not upload image files. Product images referenced by `/products/...` must exist under `public/products/`.
-4. Apply `supabase/migrations/20261115114500_optional_client_email.sql` to existing projects so customer email can be left blank.
-5. Apply `supabase/migrations/20261116_customer_auth_system.sql` and `supabase/migrations/20261116_customer_auth_fixes.sql` for the independent customer accounts (`customers`, `customer_credentials`, `customer_sessions`, `orders.customer_id`).
-6. Apply `supabase/migrations/20261117_place_order_storewide_promo.sql` so `place_order_rpc` applies the date-windowed storewide promotion exactly like `lib/pricing.ts`; without it the charged total ignores the sitewide discount.
-7. Customer accounts do **not** use Supabase Auth. They live in the `customers` table with a bcrypt password and a server-side session cookie (`lib/auth/`), so there is nothing to enable in Authentication → Sign In / Providers for customers. Email is optional and stored only as contact information. Customer data is read with the service role on the server, after `getCustomerFromSession()` validates the cookie.
-8. Create the administrator manually — the automatic `ADMIN_BOOTSTRAP_EMAIL` bootstrap is not used any more. Create an Auth user with the owner's email in the Supabase dashboard, then promote it from the SQL editor:
+1. For both new and existing projects, apply the canonical consolidated production schema: `supabase/migrations/20261122_sais_store_production.sql` in the Supabase SQL Editor. This script creates and hardens all 9 core tables (`settings`, `products`, `product_variants`, `profiles`, `clients`, `coupons`, `orders`, `order_items`, `order_status_history`), all indexes, RLS policies, and the 6 atomic RPC functions (`is_admin`, `normalize_moroccan_phone`, `order_reference_for_tracking`, `validate_coupon`, `get_order_for_tracking`, `place_order_rpc`).
+2. To import the starter catalog from `data/store.json`, verify `.env.local` points to the intended Supabase project, then run `pnpm run db:seed-products -- --confirm`. This upserts products by slug; it does not upload image files. Product images referenced by `/products/...` must exist under `public/products/`.
+3. Customer accounts follow a guest-first Moroccan e-commerce model with CRM directory in `clients` (indexed by unique phone number) and order tracking by phone + reference or unguessable token. No external passwords or third-party SMS providers are required for visitors to purchase.
+4. Administrator account setup:
+   Create an Auth user with the administrator's email in Supabase Authentication, then promote the user to admin via the SQL Editor:
 
    ```sql
    update auth.users
    set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
-   where email = 'owner@example.com';
+   where email = 'admin@your-domain.ma';
+
+   update public.profiles
+   set role = 'admin'
+   where id = (select id from auth.users where email = 'admin@your-domain.ma');
    ```
 
-   The same can be done with the Auth Admin API (`PUT /auth/v1/admin/users/{id}` with
-   `{"app_metadata":{"role":"admin"}}`). Then sign in at `/admin/login`. Never assign this role from browser code or `user_metadata`.
-9. Orders are attached to customers through `orders.customer_id`; the legacy `orders.auth_user_id` column is kept for old rows and read as a fallback (`getOrderForCustomerOrLegacy`).
+   Alternatively, setting `ADMIN_BOOTSTRAP_EMAIL` in the environment allows the initial confirmed user with that email to be promoted automatically on first login. Then sign in at `/admin/login`. Never assign administrative roles from client browser code.
 
-`client_accounts` and `admin_accounts` are not used for authentication and intentionally have no client-facing RLS policies. Do not add password credentials or service-role keys to browser code.
+5. Privilege isolation: All customer and order tables are protected by Row Level Security (RLS) allowing full access only to authenticated administrators (`is_admin()`). Public checkout operations run strictly through the atomic `place_order_rpc` SECURITY DEFINER function with pessimistic row locks on products and settings. Do not expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
 
 ## Bundler and PWA
 

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowRight, MessageCircle } from 'lucide-react'
 import { ScrollHero } from '@/components/storefront/ScrollHero'
@@ -7,6 +8,13 @@ import { HowToOrder } from '@/components/storefront/HowToOrder'
 import { Button } from '@/components/ui/Button'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 import { getStorefrontProducts, getStorefrontProduct, getSettings } from '@/lib/products'
+
+export const metadata: Metadata = {
+  title: 'SAIS Store — Vêtements Féminins Kenitra | Pyjamas & Peignoirs',
+  description:
+    'Boutique en ligne à Kenitra : pyjamas polaires, peignoirs et ensembles d’hiver pour femme. Livraison 24–48h partout au Maroc avec paiement en espèces à la livraison.',
+  alternates: { canonical: '/' },
+}
 
 export default async function StorefrontHomePage() {
   const [products, posterProduct, settings] = await Promise.all([
