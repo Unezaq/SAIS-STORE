@@ -25,6 +25,7 @@ export function SiteFooter({
     { label: 'Promotions', href: '/promotions' },
     { label: 'Nouveautés', href: '/collections/nouveautes' },
     { label: 'Espace client', href: '/espace-client' },
+    { label: 'Mon compte', href: '/compte' },
     { label: 'Suivre ma commande', href: '/suivre' },
     { label: 'Contact', href: '/contact' },
     { label: 'FAQ', href: '/faq' },

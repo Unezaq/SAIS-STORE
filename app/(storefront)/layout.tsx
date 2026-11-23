@@ -3,6 +3,7 @@ import { AdaptiveNavigation } from '@/components/layout/AdaptiveNavigation'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { SiteFooter } from '@/components/layout/SiteFooter'
 import { CartProvider } from '@/components/storefront/CartProvider'
+import { WelcomeDialog } from '@/components/storefront/WelcomeDialog'
 import { getSettings } from '@/lib/products'
 
 export default async function StorefrontLayout({
@@ -25,6 +26,7 @@ export default async function StorefrontLayout({
             deliveryFee={settings.deliveryFee}
             freeDeliveryMinItems={settings.freeDeliveryMinItems}
           />
+          <WelcomeDialog />
         </div>
       </SmoothScrollProvider>
     </CartProvider>

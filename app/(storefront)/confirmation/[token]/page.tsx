@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { CheckCircle, MessageCircle, Truck } from 'lucide-react'
+import { MessageCircle, Truck } from 'lucide-react'
 import { getOrderByToken, getSettings } from '@/lib/store'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
 import { OrderTimeline } from '@/components/storefront/OrderTimeline'
+import { OrderSuccessCelebration } from '@/components/storefront/OrderSuccessCelebration'
 import { formatMAD } from '@/lib/utils'
 import { formatMoroccanPhone, whatsappNumber } from '@/lib/phone'
 
@@ -73,15 +74,10 @@ export default async function ConfirmationPage({
   return (
     <div className="mx-auto w-full max-w-2xl px-fib-3 py-fib-6 md:px-fib-4 md:py-fib-8">
       <section className="rounded-[24px] bg-white p-6 shadow-sm ring-1 ring-hairline md:p-8">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <CheckCircle size={22} />
-          </span>
-          <div>
-            <p className="text-eyebrow uppercase text-text-muted">Commande enregistrée</p>
-            <h1 className="mt-1 text-title text-ink">Merci {firstName}.</h1>
-          </div>
-        </div>
+        <OrderSuccessCelebration
+          firstName={firstName}
+          orderNumber={order.orderNumber ?? order.id}
+        />
 
         <div className="mt-fib-3 rounded-2xl bg-surface-soft p-fib-3">
           <div className="flex flex-wrap items-start justify-between gap-3">

@@ -73,6 +73,9 @@ export function TopNav({
           <Link href="/espace-client" className="transition-colors hover:text-ink">
             Espace client
           </Link>
+          <Link href="/compte" className="transition-colors hover:text-ink">
+            Mon compte
+          </Link>
           {isAdmin && (
             <Link href="/admin" className="font-medium text-primary transition-colors hover:text-ink">
               Admin
