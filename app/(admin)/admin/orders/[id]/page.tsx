@@ -133,10 +133,15 @@ export default async function AdminOrderPage({
               Adresse de livraison
             </p>
             <p className="mt-1 text-sm leading-relaxed text-ink">{order.address}</p>
-            {order.note && (
+            {order.note?.startsWith('[WhatsApp]') && (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-whatsapp/15 px-2.5 py-1 text-[11px] font-semibold text-[#128C4A]">
+                <MessageCircle size={12} /> Commande envoyée aussi sur WhatsApp
+              </p>
+            )}
+            {order.note?.replace(/^\[WhatsApp\]\s*/, '').trim() && (
               <p className="mt-3 rounded-xl bg-surface-soft p-3 text-xs leading-relaxed text-text-muted">
                 <span className="font-medium text-ink">Note de la cliente : </span>
-                {order.note}
+                {order.note?.replace(/^\[WhatsApp\]\s*/, '')}
               </p>
             )}
           </section>

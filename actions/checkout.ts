@@ -81,6 +81,31 @@ function formString(formData: FormData, key: string): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/**
+ * Turns a Supabase/PostgREST failure into something the customer can act on.
+ * The RPC raises readable French messages (stock, variant, coupon), so those
+ * are forwarded as-is instead of being replaced by a generic "impossible".
+ */
+function describeOrderError(error: unknown): string {
+  const failure = error as { code?: string; message?: string; details?: string } | null
+  const message = typeof failure?.message === 'string' ? failure.message : ''
+
+  if (message.includes('SUPABASE_SERVICE_ROLE_KEY')) {
+    console.error(
+      '[checkout] SUPABASE_SERVICE_ROLE_KEY is missing on this deployment: orders cannot be written.'
+    )
+    return 'La commande ne peut pas être enregistrée pour le moment (configuration serveur incomplète). Écrivez-nous sur WhatsApp : nous la prenons en note tout de suite.'
+  }
+
+  // Only the RPC's own business messages (raise exception → P0001) are shown;
+  // technical/PostgREST messages stay in the server log.
+  if (failure?.code === 'P0001' && message && message.length <= 300) {
+    return message
+  }
+
+  return 'La commande n’a pas pu être enregistrée. Vérifiez votre connexion et réessayez, ou écrivez-nous sur WhatsApp.'
+}
+
 function parseJsonField(value: string): unknown {
   if (!value) return undefined
   try {
@@ -93,6 +118,8 @@ function parseJsonField(value: string): unknown {
 export async function placeOrderAction(formData: FormData): Promise<PlaceOrderResult> {
   // Idempotency key: prevents double submission on slow networks / double click
   const idempotencyKey = formString(formData, 'idempotencyKey') || undefined
+  // Orders sent from the WhatsApp button are tagged so the admin sees them.
+  const channel = formString(formData, 'channel') === 'whatsapp' ? 'whatsapp' : 'site'
 
   // The confirmation checkbox is validated on the server, not only in the UI.
   if (formString(formData, 'confirmInfo') !== 'on') {
@@ -213,42 +240,64 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
       : settings.deliveryFee
   const total = subtotal - discountTotal + deliveryFee
 
-  const order = await createOrder(
-    {
-      clientEmail: parsed.data.clientEmail || undefined,
-      clientName: parsed.data.customerName,
-      customerName: parsed.data.customerName,
-      city: parsed.data.city,
+  const note = [
+    channel === 'whatsapp' ? '[WhatsApp]' : '',
+    parsed.data.note,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 1000)
+
+  try {
+    const order = await createOrder(
+      {
+        clientEmail: parsed.data.clientEmail || undefined,
+        clientName: parsed.data.customerName,
+        customerName: parsed.data.customerName,
+        city: parsed.data.city,
+        phone: parsed.data.phone,
+        address: parsed.data.address,
+        items: orderItems,
+        subtotal,
+        discountTotal,
+        deliveryFee,
+        total,
+        status: 'en_attente',
+        note: note || undefined,
+        couponCode,
+        paymentMethod: 'cod',
+        paymentStatus: 'unpaid',
+      },
+      null,
+      null,
+      { couponCode, idempotencyKey }
+    )
+
+    revalidatePath('/admin/orders')
+    revalidatePath('/admin/clients')
+
+    return {
+      ok: true,
+      orderId: order.id,
+      orderNumber: order.orderNumber ?? orderReference(order.id),
+      trackingToken: order.trackingToken ?? '',
+      phone: order.phone,
+      total: order.total,
+      discountTotal: order.discountTotal,
+      items: confirmationItems,
+    }
+  } catch (error) {
+    const failure = error as { code?: string; message?: string; details?: string; hint?: string }
+    console.error('[checkout] placeOrderAction failed', {
+      channel,
       phone: parsed.data.phone,
-      address: parsed.data.address,
-      items: orderItems,
-      subtotal,
-      discountTotal,
-      deliveryFee,
-      total,
-      status: 'en_attente',
-      note: parsed.data.note || undefined,
-      couponCode,
-      paymentMethod: 'cod',
-      paymentStatus: 'unpaid',
-    },
-    null,
-    null,
-    { couponCode, idempotencyKey }
-  )
-
-  revalidatePath('/admin/orders')
-  revalidatePath('/admin/clients')
-
-  return {
-    ok: true,
-    orderId: order.id,
-    orderNumber: order.orderNumber ?? orderReference(order.id),
-    trackingToken: order.trackingToken ?? '',
-    phone: order.phone,
-    total: order.total,
-    discountTotal: order.discountTotal,
-    items: confirmationItems,
+      items: items.data,
+      code: failure?.code ?? null,
+      message: failure?.message ?? String(error),
+      details: failure?.details ?? null,
+      hint: failure?.hint ?? null,
+    })
+    return { ok: false, error: describeOrderError(error) }
   }
 }
 

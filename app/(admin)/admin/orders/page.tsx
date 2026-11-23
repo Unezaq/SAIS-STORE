@@ -1,5 +1,7 @@
 import Link from 'next/link'
+import { MessageCircle } from 'lucide-react'
 import { getOrders } from '@/lib/products'
+import { whatsappNumber } from '@/lib/phone'
 import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
 import { ORDER_STATUSES, ORDER_STATUS_LABELS, isOrderStatus, orderReference } from '@/lib/orderStatus'
@@ -83,6 +85,11 @@ export default async function AdminOrdersPage({
                     >
                       {orderReference(order.id)}
                     </Link>
+                    {order.note?.startsWith('[WhatsApp]') && (
+                      <span className="mt-1 flex w-fit items-center gap-1 rounded-full bg-whatsapp/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#128C4A]">
+                        <MessageCircle size={10} /> WhatsApp
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-medium text-ink">{order.customerName}</td>
                   <td className="px-4 py-3 tabular text-text-muted">
@@ -109,12 +116,24 @@ export default async function AdminOrdersPage({
                     {new Date(order.createdAt).toLocaleDateString('fr-MA')}
                   </td>
                   <td className="px-4 py-3 text-end">
-                    <Link
-                      href={`/admin/orders/${order.id}`}
-                      className="text-xs font-medium text-ink hover:underline"
-                    >
-                      Détail →
-                    </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <a
+                        href={`https://wa.me/${whatsappNumber(order.phone)}?text=${encodeURIComponent(
+                          `Bonjour ${order.customerName}, c’est SAIS Store. Votre commande ${orderReference(order.id)} (${formatMAD(order.total)}) est bien reçue. Confirmez-vous la livraison ?`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="press inline-flex h-8 items-center gap-1 rounded-full bg-whatsapp px-2.5 text-[11px] font-semibold text-white hover:opacity-90"
+                      >
+                        <MessageCircle size={13} /> WhatsApp
+                      </a>
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="text-xs font-medium text-ink hover:underline"
+                      >
+                        Détail →
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}

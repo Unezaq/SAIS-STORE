@@ -3,11 +3,11 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ShieldCheck, Truck } from 'lucide-react'
+import { MessageCircle, ShieldCheck, Truck } from 'lucide-react'
 import { placeOrderAction, validateCouponAction } from '@/actions/checkout'
-import { useCart } from '@/components/storefront/CartProvider'
+import { useCart, type CartItem } from '@/components/storefront/CartProvider'
 import { Button } from '@/components/ui/Button'
-import { formatMoroccanPhone, normalizeMoroccanPhone } from '@/lib/phone'
+import { formatMoroccanPhone, normalizeMoroccanPhone, whatsappNumber } from '@/lib/phone'
 import type { StoreSettings } from '@/lib/types/store'
 import { cn, formatMAD } from '@/lib/utils'
 
@@ -20,6 +20,8 @@ interface DeliveryDetails {
   couponCode: string
   note: string
 }
+
+type Channel = 'site' | 'whatsapp'
 
 const fieldClassName =
   'w-full rounded-xl border border-hairline bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10'
@@ -36,11 +38,57 @@ function newIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function CheckoutForm({
+/**
+ * WhatsApp recap sent to the store number: the whole order, so the team can
+ * answer even if the database write failed.
+ */
+function buildWhatsAppUrl({
   settings,
+  details,
+  items,
+  subtotal,
+  deliveryFee,
+  total,
+  reference,
+  failed,
 }: {
   settings: StoreSettings
-}) {
+  details: DeliveryDetails
+  items: CartItem[]
+  subtotal: number
+  deliveryFee: number
+  total: number
+  reference: string | null
+  failed: boolean
+}): string {
+  const lines = [
+    failed ? 'Commande SAIS — envoi manuel ⚠️' : 'Nouvelle commande SAIS 🛍️',
+    reference ? `Référence : ${reference}` : 'Référence : à confirmer',
+    '',
+    `Nom : ${details.customerName}`,
+    `Téléphone : ${formatMoroccanPhone(details.phone)}`,
+    `Ville : ${details.city}`,
+    `Adresse : ${details.address}`,
+    details.clientEmail ? `Email : ${details.clientEmail}` : '',
+    details.couponCode ? `Code promo : ${details.couponCode.toUpperCase()}` : '',
+    details.note ? `Note : ${details.note}` : '',
+    '',
+    'Articles :',
+    ...items.map(
+      (item) =>
+        `• ${item.quantity} × ${item.title} (${[item.color, item.size].filter(Boolean).join(' · ') || 'sans variante'}) — ${formatMAD(item.price * item.quantity)}`
+    ),
+    '',
+    `Sous-total : ${formatMAD(subtotal)}`,
+    `Livraison : ${deliveryFee === 0 ? 'offerte' : formatMAD(deliveryFee)}`,
+    `Total à payer à la livraison : ${formatMAD(total)}`,
+    failed ? '\n⚠️ Le site n’a pas pu enregistrer la commande automatiquement : merci de la saisir dans le back-office.' : '',
+  ].filter((line) => line !== '')
+
+  return `https://wa.me/${whatsappNumber(settings.whatsappPhone)}?text=${encodeURIComponent(lines.join('\n'))}`
+}
+
+export function CheckoutForm({ settings }: { settings: StoreSettings }) {
   const { items, subtotal, ready, clearCart } = useCart()
   const router = useRouter()
   const itemCount = items.reduce((total, item) => total + item.quantity, 0)
@@ -55,6 +103,7 @@ export function CheckoutForm({
   const [couponFeedback, setCouponFeedback] = React.useState<string | null>(null)
   const [confirmed, setConfirmed] = React.useState(false)
   const [pending, setPending] = React.useState(false)
+  const [pendingChannel, setPendingChannel] = React.useState<Channel | null>(null)
   const [error, setError] = React.useState('')
   const [idempotencyKey, setIdempotencyKey] = React.useState('')
 
@@ -120,15 +169,33 @@ export function CheckoutForm({
     window.scrollTo({ top: 0 })
   }
 
-  async function handleConfirm(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!details) return
+  async function submitOrder(channel: Channel) {
+    if (!details || pendingChannel) return
     if (!confirmed) {
       setError('Merci de cocher la case pour confirmer vos informations.')
       return
     }
 
-    setPending(true)
+    // The WhatsApp tab is opened on the click itself so mobile browsers don't
+    // block it while the order is being saved server-side.
+    const waWindow = channel === 'whatsapp' ? window.open('', '_blank') : null
+    if (waWindow) waWindow.opener = null
+
+    const openWhatsApp = (reference: string | null, failed: boolean) => {
+      if (!waWindow || !details) return
+      waWindow.location.href = buildWhatsAppUrl({
+        settings,
+        details,
+        items,
+        subtotal,
+        deliveryFee,
+        total,
+        reference,
+        failed,
+      })
+    }
+
+    setPendingChannel(channel)
     setError('')
 
     const formData = new FormData()
@@ -141,32 +208,39 @@ export function CheckoutForm({
     formData.set('note', details.note)
     formData.set('confirmInfo', 'on')
     formData.set('idempotencyKey', idempotencyKey)
+    formData.set('channel', channel)
     formData.set(
       'items',
-      JSON.stringify(
-        items.map(({ slug, color, size, quantity }) => ({ slug, color, size, quantity }))
-      )
+      JSON.stringify(items.map(({ slug, color, size, quantity }) => ({ slug, color, size, quantity })))
     )
 
     try {
       const result = await placeOrderAction(formData)
+
       if (!result.ok) {
         setError(result.error)
-        setPending(false)
+        // Never lose a sale: the WhatsApp tab still carries the whole order.
+        openWhatsApp(null, true)
         return
       }
 
+      openWhatsApp(result.orderNumber, false)
       clearCart()
+
       const token = result.trackingToken || result.orderNumber
       if (token) {
         router.push(`/confirmation/${encodeURIComponent(token)}`)
-      } else {
+      } else if (!waWindow) {
         setError('La commande a été créée mais le lien de suivi est indisponible.')
-        setPending(false)
       }
-    } catch {
-      setError('Impossible d’enregistrer la commande. Réessayez ou écrivez-nous sur WhatsApp.')
-      setPending(false)
+    } catch (failure) {
+      console.error('[checkout] confirmation failed', failure)
+      setError(
+        'Impossible de joindre le serveur. Vérifiez votre connexion, réessayez ou envoyez la commande sur WhatsApp.'
+      )
+      openWhatsApp(null, true)
+    } finally {
+      setPendingChannel(null)
     }
   }
 
@@ -392,7 +466,13 @@ export function CheckoutForm({
               </dl>
             )}
 
-            <form onSubmit={handleConfirm} className="mt-5">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                void submitOrder('site')
+              }}
+              className="mt-5"
+            >
               <label className="flex items-start gap-3 rounded-2xl border border-hairline p-3 text-sm leading-relaxed text-text-muted">
                 <input
                   type="checkbox"
@@ -410,22 +490,68 @@ export function CheckoutForm({
               </label>
 
               {error && (
-                <p role="alert" className="mt-3 text-sm text-rose-700">
-                  {error}
-                </p>
+                <div role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800 ring-1 ring-rose-200">
+                  <p>{error}</p>
+                  {details && (
+                    <a
+                      href={buildWhatsAppUrl({
+                        settings,
+                        details,
+                        items,
+                        subtotal,
+                        deliveryFee,
+                        total,
+                        reference: null,
+                        failed: true,
+                      })}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 font-medium text-rose-900 underline"
+                    >
+                      <MessageCircle size={14} /> Envoyer ma commande sur WhatsApp
+                    </a>
+                  )}
+                </div>
               )}
 
               <Button
                 type="submit"
                 size="lg"
                 className="mt-4 w-full"
-                isLoading={pending}
-                disabled={pending || !confirmed}
+                isLoading={pendingChannel === 'site'}
+                disabled={pendingChannel !== null || !confirmed}
               >
-                {pending ? 'Enregistrement…' : `Confirmer ma commande · ${formatMAD(total)}`}
+                {pendingChannel === 'site'
+                  ? 'Enregistrement…'
+                  : `Confirmer ma commande · ${formatMAD(total)}`}
               </Button>
               <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-text-muted">
                 <ShieldCheck size={13} /> Prix et frais de livraison revérifiés côté serveur.
+              </p>
+
+              <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-text-muted">
+                <span className="h-px flex-1 bg-hairline" />
+                ou
+                <span className="h-px flex-1 bg-hairline" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void submitOrder('whatsapp')}
+                disabled={pendingChannel !== null || !confirmed}
+                className="press inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-full border-2 border-[#25D366] bg-white px-6 text-[15px] font-semibold text-[#128C4A] transition-colors hover:bg-[#25D366]/10 disabled:pointer-events-none disabled:opacity-40"
+              >
+                {pendingChannel === 'whatsapp' ? (
+                  <span>Ouverture de WhatsApp…</span>
+                ) : (
+                  <>
+                    <MessageCircle size={18} /> Commander sur WhatsApp
+                  </>
+                )}
+              </button>
+              <p className="mt-2 text-center text-[11px] leading-relaxed text-text-muted">
+                Même commande, même prix : elle est enregistrée chez nous et envoyée à l’équipe sur
+                WhatsApp, avec vos coordonnées complètes.
               </p>
             </form>
           </section>
@@ -485,7 +611,7 @@ function OrderSummary({
         <span className="text-text-muted">Sous-total</span>
         <span className="font-semibold text-ink">{formatMAD(subtotal)}</span>
       </div>
-      {discountTotal && discountTotal > 0 && (
+      {discountTotal > 0 && (
         <div className="mt-1 flex justify-between text-sm text-rose-600">
           <span>Réduction</span>
           <span className="tabular font-medium">- {formatMAD(discountTotal)}</span>

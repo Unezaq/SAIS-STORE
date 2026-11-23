@@ -153,8 +153,8 @@ export function ProductActions({
           <Button
             type="button"
             size="lg"
-            variant="outline"
-            className="w-full sm:w-auto"
+            variant="primary"
+            className="w-full shadow-[0_10px_24px_-12px_rgba(27,67,50,0.7)] sm:w-auto"
             disabled={pending}
             onClick={handleAddToCart}
           >

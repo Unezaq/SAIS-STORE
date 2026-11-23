@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CheckCircle, MessageCircle, Truck } from 'lucide-react'
-import { getOrderByToken } from '@/lib/store'
+import { getOrderByToken, getSettings } from '@/lib/store'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
 import { OrderTimeline } from '@/components/storefront/OrderTimeline'
 import { formatMAD } from '@/lib/utils'
@@ -46,9 +46,28 @@ export default async function ConfirmationPage({
     notFound()
   }
 
+  const settings = await getSettings()
   const firstName = order.customerName.split(' ')[0] ?? ''
+  // Sent to the STORE number (previously it opened the customer's own chat).
   const whatsappText = encodeURIComponent(
-    `Bonjour SAIS 👋\nJe viens de passer la commande ${order.orderNumber}.\n\nTotal à payer à la livraison : ${formatMAD(order.total)}\nMerci de me confirmer la livraison.`
+    [
+      'Bonjour SAIS 👋',
+      `Je viens de passer la commande ${order.orderNumber}.`,
+      '',
+      'Articles :',
+      ...order.items.map(
+        (item) =>
+          `• ${item.quantity} × ${item.title} (${[item.color, item.size].filter(Boolean).join(' · ') || 'sans variante'}) — ${formatMAD(item.price * item.quantity)}`
+      ),
+      '',
+      `Total à payer à la livraison : ${formatMAD(order.total)}`,
+      `Nom : ${order.customerName}`,
+      `Téléphone : ${formatMoroccanPhone(order.phone)}`,
+      `Ville : ${order.city}`,
+      `Adresse : ${order.address}`,
+      '',
+      'Merci de me confirmer la livraison.',
+    ].join('\n')
   )
 
   return (
@@ -125,7 +144,7 @@ export default async function ConfirmationPage({
 
         <div className="mt-fib-3 flex flex-col gap-2 sm:flex-row">
           <a
-            href={`https://wa.me/${whatsappNumber(order.phone)}?text=${whatsappText}`}
+            href={`https://wa.me/${whatsappNumber(settings.whatsappPhone)}?text=${whatsappText}`}
             target="_blank"
             rel="noreferrer"
             className="press inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-medium text-white hover:bg-primary-light"

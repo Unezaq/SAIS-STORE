@@ -32,7 +32,43 @@ function upperRight8(id: string): string {
   return id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(-8)
 }
 
-function mapOrder(row: OrderRow): StoreOrder {
+type OrderItemRow = {
+  product_id: string
+  name_snapshot: string
+  variant?: string | null
+  unit_price: number | string
+  quantity: number
+  products?: { slug?: string | null } | null
+}
+
+/**
+ * The orders.items JSON snapshot only carries slug/color/size/quantity. The
+ * readable line items (title, unit price) live in order_items, so every read
+ * enriches the order from that table. Without this, admin and confirmation
+ * pages printed `undefined` and `NaN MAD`.
+ */
+function mapJoinedItems(
+  rawItems: unknown,
+  fallback: StoreOrder['items']
+): StoreOrder['items'] {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) return fallback
+
+  return rawItems.map((raw) => {
+    const item = raw as OrderItemRow
+    const [color, size] = (item.variant ?? '').split(' / ')
+
+    return {
+      slug: item.products?.slug ?? item.product_id,
+      title: item.name_snapshot,
+      color: color || undefined,
+      size: size || undefined,
+      quantity: Number(item.quantity),
+      price: Number(item.unit_price),
+    }
+  })
+}
+
+function mapOrder(row: OrderRow, items?: StoreOrder['items']): StoreOrder {
   return {
     id: row.id,
     orderNumber: row.order_number || ('SAIS-' + upperRight8(row.id)),
@@ -43,7 +79,7 @@ function mapOrder(row: OrderRow): StoreOrder {
     phone: row.phone,
     city: row.city || 'Casablanca',
     address: row.address,
-    items: row.items ?? [],
+    items: items ?? row.items ?? [],
     subtotal: Number(row.subtotal),
     discountTotal: Number(row.discount_total ?? 0),
     deliveryFee: Number(row.delivery_fee),
@@ -72,7 +108,7 @@ export async function createOrder(
     quantity: item.quantity,
   }))
 
-  const { data, error } = await supabase.rpc('place_order_rpc', {
+  const rpcArgs = {
     p_auth_user_id: authUserId,
     p_customer_id: customerId,
     p_client_email: order.clientEmail ?? null,
@@ -85,7 +121,26 @@ export async function createOrder(
     p_note: order.note ?? null,
     p_coupon_code: options.couponCode ?? null,
     p_idempotency_key: options.idempotencyKey ?? null,
-  })
+  }
+
+  let { data, error } = await supabase.rpc('place_order_rpc', rpcArgs)
+
+  /**
+   * 42702 = ambiguous column inside place_order_rpc's idempotency lookup. The
+   * order itself is valid, so retry once without the key instead of failing the
+   * sale. Permanent fix: migration 20261123_fix_place_order_rpc_idempotency.sql.
+   */
+  if (error?.code === '42702' && options.idempotencyKey) {
+    console.warn(
+      '[orders] place_order_rpc rejected the idempotency clause; retrying without a key. Apply migration 20261123_fix_place_order_rpc_idempotency.sql.'
+    )
+    const retry = await supabase.rpc('place_order_rpc', {
+      ...rpcArgs,
+      p_idempotency_key: null,
+    })
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) throw error
 
@@ -120,47 +175,61 @@ export async function getOrders(): Promise<StoreOrder[]> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*, products(slug))')
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []).map((row) => mapOrder(row as OrderRow))
+  return (data ?? []).map((row) =>
+    mapOrder(row as OrderRow, mapJoinedItems((row as any).order_items, (row as OrderRow).items ?? []))
+  )
 }
 
 export async function getOrderById(id: string): Promise<StoreOrder | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*, products(slug))')
     .eq('id', id)
     .maybeSingle()
 
   if (error) throw error
-  return data ? mapOrder(data as OrderRow) : null
+  return data
+    ? mapOrder(
+        data as OrderRow,
+        mapJoinedItems((data as any).order_items, (data as OrderRow).items ?? [])
+      )
+    : null
 }
 
 export async function getOrderByToken(token: string): Promise<StoreOrder | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*, products(slug))')
     .eq('tracking_token', token)
     .maybeSingle()
 
   if (error) throw error
-  return data ? mapOrder(data as OrderRow) : null
+  return data
+    ? mapOrder(
+        data as OrderRow,
+        mapJoinedItems((data as any).order_items, (data as OrderRow).items ?? [])
+      )
+    : null
 }
 
 export async function getOrdersByPhone(phone: string): Promise<StoreOrder[]> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*, products(slug))')
     .eq('phone', phone)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []).map((row) => mapOrder(row as OrderRow))
+  return (data ?? []).map((row) =>
+    mapOrder(row as OrderRow, mapJoinedItems((row as any).order_items, (row as OrderRow).items ?? []))
+  )
 }
 
 export async function updateOrderStatus(
@@ -190,27 +259,15 @@ export async function getOrderDetail(id: string): Promise<StoreOrder | null> {
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('orders')
-    .select('*, order_items(*)')
+    .select('*, order_items(*, products(slug))')
     .eq('id', id)
     .maybeSingle()
 
   if (error) throw error
   if (!data) return null
 
-  const order = mapOrder(data as OrderRow)
-  const orderItems = (data as any).order_items ?? []
-
-  return {
-    ...order,
-    items: orderItems.length > 0
-      ? orderItems.map((oi: any) => ({
-          slug: oi.product_id,
-          title: oi.name_snapshot,
-          color: oi.variant ? oi.variant.split(' / ')[0] : undefined,
-          size: oi.variant && oi.variant.includes(' / ') ? oi.variant.split(' / ')[1] : undefined,
-          quantity: oi.quantity,
-          price: Number(oi.unit_price),
-        }))
-      : order.items,
-  }
+  return mapOrder(
+    data as OrderRow,
+    mapJoinedItems((data as any).order_items, (data as OrderRow).items ?? [])
+  )
 }
