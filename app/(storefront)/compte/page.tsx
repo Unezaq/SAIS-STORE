@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getAuthenticatedUser } from '@/lib/security/auth'
 import { getSettings } from '@/lib/products'
@@ -25,6 +26,25 @@ export default async function AccountPage({
     getAuthenticatedUser(),
     getSettings(),
   ])
+
+  // Admins who land on the customer account page are redirected to the
+  // admin dashboard instead of seeing their customer profile.
+  if (user) {
+    const isAdmin =
+      (user.app_metadata?.role as string) === 'admin' ||
+      (await (async () => {
+        const { createClient } = await import('@/lib/supabase/server')
+        const supabase = await createClient()
+        const { data } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+        return data?.role === 'admin'
+      })())
+    if (isAdmin) redirect('/admin')
+  }
+
   const metadata = user?.user_metadata ?? {}
   const fullName =
     (typeof metadata.full_name === 'string' && metadata.full_name) ||

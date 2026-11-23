@@ -19,6 +19,7 @@ import {
   requireAdmin,
 } from '@/lib/supabase/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { StoreSettings } from '@/lib/types/store'
 
 const emailSchema = z.email()
@@ -143,6 +144,15 @@ export async function loginAction(formData: FormData) {
         if (signOutError) throw signOutError
       }
       return { ok: false, error: 'Email ou mot de passe incorrect.' }
+    }
+
+    // Sync app_metadata so the proxy (which only checks app_metadata.role)
+    // lets this admin through on subsequent requests.
+    if (data.user) {
+      const admin = createAdminClient()
+      await admin.auth.admin.updateUserById(data.user.id, {
+        app_metadata: { ...data.user.app_metadata, role: 'admin' },
+      })
     }
   }
 
