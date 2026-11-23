@@ -2,7 +2,9 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Gift, LogOut, Sparkles, Truck, UserRound } from 'lucide-react'
 import { getAuthenticatedUser } from '@/lib/security/auth'
+import { getSettings } from '@/lib/products'
 import { AccountForms } from '@/components/storefront/AccountForms'
+import { TrackOrderForm } from '@/components/storefront/TrackOrderForm'
 import { logoutAccountAction } from '@/actions/customer-account'
 import { formatMoroccanPhone } from '@/lib/phone'
 
@@ -38,7 +40,11 @@ export default async function AccountPage({
 }: {
   searchParams: Promise<{ mode?: string }>
 }) {
-  const [{ mode }, user] = await Promise.all([searchParams, getAuthenticatedUser()])
+  const [{ mode }, user, settings] = await Promise.all([
+    searchParams,
+    getAuthenticatedUser(),
+    getSettings(),
+  ])
   const metadata = user?.user_metadata ?? {}
   const fullName =
     (typeof metadata.full_name === 'string' && metadata.full_name) ||
@@ -126,6 +132,18 @@ export default async function AccountPage({
           })}
         </aside>
       </div>
+
+      <section className="mt-fib-5">
+        <p className="text-eyebrow uppercase text-text-muted">Suivi</p>
+        <h2 className="mt-fib-1 text-heading text-ink">Suivre ma commande</h2>
+        <p className="mt-fib-1 max-w-xl text-sm leading-relaxed text-text-muted">
+          Même sans être connectée : entrez le téléphone utilisé à la commande et sa référence
+          SAIS-…, le statut s’affiche immédiatement.
+        </p>
+        <div className="mt-fib-3">
+          <TrackOrderForm whatsappPhone={settings.whatsappPhone} />
+        </div>
+      </section>
     </div>
   )
 }

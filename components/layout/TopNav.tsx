@@ -67,9 +67,6 @@ export function TopNav({
           <Link href="/promotions" className="transition-colors hover:text-ink">
             Promotions
           </Link>
-          <Link href="/suivre" className="transition-colors hover:text-ink">
-            Suivre ma commande
-          </Link>
           <Link href="/espace-client" className="transition-colors hover:text-ink">
             Espace client
           </Link>
@@ -184,9 +181,9 @@ export function TopNav({
           </button>
 
           <Link
-            href="/suivre"
+            href="/compte"
             className="press flex h-9 w-9 items-center justify-center rounded-full text-ink/70 hover:bg-ink/[0.05] hover:text-ink"
-            aria-label="Suivre ma commande"
+            aria-label="Mon compte"
           >
             <User size={17} strokeWidth={1.8} />
           </Link>

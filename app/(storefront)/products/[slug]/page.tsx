@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 import { ScrollReveal } from '@/components/ui/ScrollReveal'
 import { ProductGrid } from '@/components/storefront/ProductGrid'
 import { ProductMediaAndActions } from '@/components/storefront/ProductMediaAndActions'
-import { getGalleryImages } from '@/lib/gallery'
+import { dedupeImages, getGalleryImages } from '@/lib/gallery'
 import { JsonLd, productJsonLd, breadcrumbJsonLd } from '@/lib/seo'
 import { getSettings, getStorefrontProduct, getStorefrontProducts } from '@/lib/products'
 import { formatMAD } from '@/lib/utils'
@@ -91,13 +91,11 @@ export default async function ProductPage({
         </nav>
         <ProductMediaAndActions
           product={product}
-          images={[
+          images={dedupeImages([
             product.imageUrl,
-            ...Object.values(product.colorImages ?? {}).filter(
-              (src) => src !== product.imageUrl
-            ),
+            ...Object.values(product.colorImages ?? {}),
             ...getGalleryImages(product.slug),
-          ]}
+          ])}
           deliveryFee={settings.deliveryFee}
           freeDeliveryMinItems={settings.freeDeliveryMinItems}
           whatsappPhone={settings.whatsappPhone}

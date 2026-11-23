@@ -2,12 +2,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, MessageCircle, Phone, Printer, Truck } from 'lucide-react'
 import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
+import { OrderRiskBadge } from '@/components/admin/OrderRiskBadge'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
+import { assessOrderRisk } from '@/lib/risk'
 import { OrderTimeline } from '@/components/storefront/OrderTimeline'
 import { getSettings } from '@/lib/products'
 import { orderReference } from '@/lib/orderStatus'
 import { formatMoroccanPhone, whatsappNumber } from '@/lib/phone'
-import { getOrderById } from '@/lib/store'
+import { getOrderById, getOrders } from '@/lib/store'
 import { formatMAD } from '@/lib/utils'
 
 export default async function AdminOrderPage({
@@ -16,9 +18,14 @@ export default async function AdminOrderPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [order, settings] = await Promise.all([getOrderById(id), getSettings()])
+  const [order, settings, history] = await Promise.all([
+    getOrderById(id),
+    getSettings(),
+    getOrders(),
+  ])
   if (!order) notFound()
 
+  const risk = assessOrderRisk(order, history)
   const reference = orderReference(order.id)
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const whatsappText = encodeURIComponent(
@@ -117,6 +124,22 @@ export default async function AdminOrderPage({
         </div>
 
         <div className="flex flex-col gap-fib-3">
+          <section className="rounded-[20px] bg-white p-fib-3 shadow-sm ring-1 ring-hairline">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-heading text-ink">Risque commande</h2>
+              <OrderRiskBadge risk={risk} />
+            </div>
+            <p className="mt-1 text-xs text-text-muted">Score {risk.score}</p>
+            <ul className="mt-2 flex flex-col gap-1 text-xs leading-relaxed text-text-muted">
+              {risk.reasons.map((reason) => (
+                <li key={reason}>• {reason}</li>
+              ))}
+            </ul>
+            <p className="mt-2 rounded-xl bg-surface-soft p-3 text-xs leading-relaxed text-ink">
+              {risk.recommendation}
+            </p>
+          </section>
+
           <section className="rounded-[20px] bg-white p-fib-3 shadow-sm ring-1 ring-hairline">
             <h2 className="text-heading text-ink">Cliente</h2>
             <p className="mt-2 text-sm font-medium text-ink">{order.customerName}</p>

@@ -9,6 +9,15 @@ const IMAGE_EXT = /\.(jpe?g|png|webp)$/i
  * sit there (1.jpg, 2.jpg, IMG_xxxx.jpg…) becomes part of the product gallery,
  * sorted naturally (1, 2, 10) — no data file to edit, just drop and sync.
  */
+/**
+ * Colour photos are often the same files as the numbered gallery shots, so a
+ * naive concat gives the same src twice. React keys must be unique: keep the
+ * first occurrence, preserving order.
+ */
+export function dedupeImages(images: string[]): string[] {
+  return [...new Set(images)]
+}
+
 export function getGalleryImages(slug: string): string[] {
   try {
     const dir = join(process.cwd(), 'public', 'products', slug)

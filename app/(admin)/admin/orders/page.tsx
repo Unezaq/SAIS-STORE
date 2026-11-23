@@ -3,7 +3,9 @@ import { MessageCircle } from 'lucide-react'
 import { getOrders } from '@/lib/products'
 import { whatsappNumber } from '@/lib/phone'
 import { OrderStatusSelect } from '@/components/admin/OrderStatusSelect'
+import { OrderRiskBadge } from '@/components/admin/OrderRiskBadge'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
+import { assessOrderRisk } from '@/lib/risk'
 import { ORDER_STATUSES, ORDER_STATUS_LABELS, isOrderStatus, orderReference } from '@/lib/orderStatus'
 import { formatMAD } from '@/lib/utils'
 
@@ -16,6 +18,7 @@ export default async function AdminOrdersPage({
   const status = rawStatus && isOrderStatus(rawStatus) ? rawStatus : 'all'
   const orders = await getOrders()
   const filtered = status === 'all' ? orders : orders.filter((order) => order.status === status)
+  const risks = new Map(orders.map((order) => [order.id, assessOrderRisk(order, orders)]))
   const pending = orders.filter((order) => order.status === 'en_attente').length
 
   const filters = [
@@ -70,6 +73,7 @@ export default async function AdminOrdersPage({
                 <th className="px-4 py-3">Téléphone</th>
                 <th className="px-4 py-3">Articles</th>
                 <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Risque</th>
                 <th className="px-4 py-3">Statut</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3" />
@@ -106,6 +110,13 @@ export default async function AdminOrdersPage({
                       .join(' · ')}
                   </td>
                   <td className="px-4 py-3 tabular font-medium text-ink">{formatMAD(order.total)}</td>
+                  <td className="px-4 py-3">
+                    {order.status === 'annulee' || order.status === 'livree' ? (
+                      <span className="text-xs text-text-muted">—</span>
+                    ) : (
+                      <OrderRiskBadge risk={risks.get(order.id)!} />
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5">
                       <OrderStatusBadge status={order.status} />

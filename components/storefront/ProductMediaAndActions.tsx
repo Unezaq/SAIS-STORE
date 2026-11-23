@@ -46,13 +46,12 @@ export function ProductMediaAndActions({
       if (!nextColor || !product.colorImages) return
       const target = product.colorImages[nextColor]
       if (!target) return
-      const index = [
-        product.imageUrl,
-        ...Object.values(product.colorImages ?? {}),
-      ].findIndex((src) => src === target)
+      // Look the colour photo up in the exact list the gallery renders, so the
+      // index cannot drift when colour photos overlap the numbered shots.
+      const index = images.findIndex((src) => src === target)
       if (index >= 0) setGalleryIndex(index)
     },
-    [product]
+    [images, product.colorImages]
   )
 
   const onSale =

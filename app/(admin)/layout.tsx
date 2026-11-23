@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Tag } from 'lucide-react'
+import { Activity, LayoutDashboard, Package, ShoppingCart, Users, Settings, Tag } from 'lucide-react'
 import { LogoutButton } from '@/components/admin/LogoutButton'
 import { requireAdmin } from '@/lib/supabase/auth'
 
@@ -7,6 +7,7 @@ const nav = [
   { label: 'Tableau de bord', href: '/admin', icon: LayoutDashboard },
   { label: 'Produits', href: '/admin/products', icon: Package },
   { label: 'Commandes', href: '/admin/orders', icon: ShoppingCart },
+  { label: 'Pilotage', href: '/admin/pilotage', icon: Activity },
   { label: 'Clients', href: '/admin/clients', icon: Users },
   { label: 'Promotions', href: '/admin/coupons', icon: Tag },
   { label: 'Paramètres', href: '/admin/settings', icon: Settings },

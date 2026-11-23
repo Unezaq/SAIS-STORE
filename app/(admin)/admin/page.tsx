@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { getProducts, getOrders, getAdminClients } from '@/lib/products'
 import { OrderStatusBadge } from '@/components/storefront/OrderStatusBadge'
 import { orderReference } from '@/lib/orderStatus'
-import { Package, ShoppingCart, Users, TrendingUp } from 'lucide-react'
+import { Package, ShoppingCart, Users, TrendingUp, ShieldAlert } from 'lucide-react'
+import { summarizeRisks } from '@/lib/risk'
 import { formatMAD } from '@/lib/utils'
 
 export default async function AdminDashboard() {
@@ -18,6 +19,14 @@ export default async function AdminDashboard() {
   const averageBasket = paidOrders.length > 0 ? Math.round(revenue / paidOrders.length) : 0
   const pendingOrders = orders.filter((order) => order.status === 'en_attente').length
   const recentOrders = orders.slice(0, 5)
+  const openOrders = orders.filter(
+    (order) => order.status === 'en_attente' || order.status === 'confirmee'
+  )
+  const risks = summarizeRisks(openOrders, orders)
+  const totalDiscount = paidOrders.reduce(
+    (sum, order) => sum + Math.max(0, order.subtotal + order.deliveryFee - order.total),
+    0
+  )
 
   const stats = [
     { label: 'Produits', value: String(products.length), icon: Package },
@@ -98,6 +107,22 @@ export default async function AdminDashboard() {
         </section>
 
         <section className="flex flex-col gap-fib-2">
+          <div className="rounded-[20px] bg-white p-fib-3 shadow-sm ring-1 ring-hairline">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-heading text-ink">Risque & remises</h2>
+              <ShieldAlert size={16} className="text-text-muted" />
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-text-muted">
+              {risks.counts.eleve} commande{risks.counts.eleve > 1 ? 's' : ''} à risque élevé ·{' '}
+              {risks.counts.moyen} à vérifier · {formatMAD(totalDiscount)} de remises accordées.
+            </p>
+            <Link
+              href="/admin/pilotage"
+              className="press mt-fib-2 inline-flex items-center gap-1.5 text-sm font-medium text-ink"
+            >
+              Ouvrir le pilotage →
+            </Link>
+          </div>
           <div className="rounded-[20px] bg-white p-fib-3 shadow-sm ring-1 ring-hairline">
             <h2 className="text-heading text-ink">À confirmer</h2>
             <p className="mt-1 text-sm text-text-muted">
