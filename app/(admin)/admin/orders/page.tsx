@@ -64,93 +64,152 @@ export default async function AdminOrdersPage({
           Aucune commande dans ce filtre.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
-          <table className="w-full min-w-[880px] text-sm">
-            <thead className="bg-surface-soft text-left text-[11px] uppercase tracking-[0.12em] text-text-muted">
-              <tr>
-                <th className="px-4 py-3">Référence</th>
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Téléphone</th>
-                <th className="px-4 py-3">Articles</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Risque</th>
-                <th className="px-4 py-3">Statut</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {filtered.map((order) => (
-                <tr key={order.id} className="hover:bg-surface-soft/60">
-                  <td className="px-4 py-3">
+        <>
+          {/* Mobile: cards */}
+          <div className="grid gap-3 md:hidden">
+            {filtered.map((order) => (
+              <div
+                key={order.id}
+                className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-hairline"
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    className="font-mono text-xs font-semibold text-ink hover:underline"
+                  >
+                    {orderReference(order.id)}
+                  </Link>
+                  <OrderStatusBadge status={order.status} />
+                </div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <p className="text-sm font-medium text-ink truncate">{order.customerName}</p>
+                  <span className="tabular text-sm font-medium text-ink">{formatMAD(order.total)}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <OrderRiskBadge risk={risks.get(order.id)!} />
+                  <OrderStatusSelect orderId={order.id} currentStatus={order.status} />
+                  {order.note?.startsWith('[WhatsApp]') && (
+                    <span className="flex items-center gap-1 rounded-full bg-whatsapp/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#128C4A]">
+                      <MessageCircle size={10} /> WhatsApp
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-hairline">
+                  <span className="text-xs text-text-muted">
+                    {new Date(order.createdAt).toLocaleDateString('fr-MA')}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`https://wa.me/${whatsappNumber(order.phone)}?text=${encodeURIComponent(
+                        `Bonjour ${order.customerName}, c’est SAIS Store. Votre commande ${orderReference(order.id)} (${formatMAD(order.total)}) est bien reçue. Confirmez-vous la livraison ?`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="press inline-flex h-8 items-center gap-1 rounded-full bg-whatsapp px-2.5 text-[11px] font-semibold text-white hover:opacity-90"
+                    >
+                      <MessageCircle size={13} /> WhatsApp
+                    </a>
                     <Link
                       href={`/admin/orders/${order.id}`}
-                      className="font-mono text-xs font-semibold text-ink hover:underline"
+                      className="text-xs font-medium text-ink hover:underline"
                     >
-                      {orderReference(order.id)}
+                      Détail →
                     </Link>
-                    {order.note?.startsWith('[WhatsApp]') && (
-                      <span className="mt-1 flex w-fit items-center gap-1 rounded-full bg-whatsapp/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#128C4A]">
-                        <MessageCircle size={10} /> WhatsApp
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-ink">{order.customerName}</td>
-                  <td className="px-4 py-3 tabular text-text-muted">
-                    <a href={`tel:${order.phone}`} className="hover:text-ink hover:underline">
-                      {order.phone}
-                    </a>
-                  </td>
-                  <td className="max-w-[20rem] whitespace-normal px-4 py-3 text-xs text-text-muted">
-                    {order.items
-                      .map(
-                        (item) =>
-                          `${item.title} (${item.color ?? '—'}, ${item.size ?? '—'}) ×${item.quantity}`
-                      )
-                      .join(' · ')}
-                  </td>
-                  <td className="px-4 py-3 tabular font-medium text-ink">{formatMAD(order.total)}</td>
-                  <td className="px-4 py-3">
-                    {order.status === 'annulee' || order.status === 'livree' ? (
-                      <span className="text-xs text-text-muted">—</span>
-                    ) : (
-                      <OrderRiskBadge risk={risks.get(order.id)!} />
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1.5">
-                      <OrderStatusBadge status={order.status} />
-                      <OrderStatusSelect orderId={order.id} currentStatus={order.status} />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-text-muted">
-                    {new Date(order.createdAt).toLocaleDateString('fr-MA')}
-                  </td>
-                  <td className="px-4 py-3 text-end">
-                    <div className="flex items-center justify-end gap-2">
-                      <a
-                        href={`https://wa.me/${whatsappNumber(order.phone)}?text=${encodeURIComponent(
-                          `Bonjour ${order.customerName}, c’est SAIS Store. Votre commande ${orderReference(order.id)} (${formatMAD(order.total)}) est bien reçue. Confirmez-vous la livraison ?`
-                        )}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="press inline-flex h-8 items-center gap-1 rounded-full bg-whatsapp px-2.5 text-[11px] font-semibold text-white hover:opacity-90"
-                      >
-                        <MessageCircle size={13} /> WhatsApp
-                      </a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto rounded-[20px] bg-white shadow-sm ring-1 ring-hairline">
+            <table className="w-full min-w-[880px] text-sm">
+              <thead className="bg-surface-soft text-left text-[11px] uppercase tracking-[0.12em] text-text-muted">
+                <tr>
+                  <th className="px-4 py-3">Référence</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Téléphone</th>
+                  <th className="px-4 py-3">Articles</th>
+                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Risque</th>
+                  <th className="px-4 py-3">Statut</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-hairline">
+                {filtered.map((order) => (
+                  <tr key={order.id} className="hover:bg-surface-soft/60">
+                    <td className="px-4 py-3">
                       <Link
                         href={`/admin/orders/${order.id}`}
-                        className="text-xs font-medium text-ink hover:underline"
+                        className="font-mono text-xs font-semibold text-ink hover:underline"
                       >
-                        Détail →
+                        {orderReference(order.id)}
                       </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      {order.note?.startsWith('[WhatsApp]') && (
+                        <span className="mt-1 flex w-fit items-center gap-1 rounded-full bg-whatsapp/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#128C4A]">
+                          <MessageCircle size={10} /> WhatsApp
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-ink">{order.customerName}</td>
+                    <td className="px-4 py-3 tabular text-text-muted">
+                      <a href={`tel:${order.phone}`} className="hover:text-ink hover:underline">
+                        {order.phone}
+                      </a>
+                    </td>
+                    <td className="max-w-[20rem] whitespace-normal px-4 py-3 text-xs text-text-muted">
+                      {order.items
+                        .map(
+                          (item) =>
+                            `${item.title} (${item.color ?? '—'}, ${item.size ?? '—'}) ×${item.quantity}`
+                        )
+                        .join(' · ')}
+                    </td>
+                    <td className="px-4 py-3 tabular font-medium text-ink">{formatMAD(order.total)}</td>
+                    <td className="px-4 py-3">
+                      {order.status === 'annulee' || order.status === 'livree' ? (
+                        <span className="text-xs text-text-muted">—</span>
+                      ) : (
+                        <OrderRiskBadge risk={risks.get(order.id)!} />
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1.5">
+                        <OrderStatusBadge status={order.status} />
+                        <OrderStatusSelect orderId={order.id} currentStatus={order.status} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-text-muted">
+                      {new Date(order.createdAt).toLocaleDateString('fr-MA')}
+                    </td>
+                    <td className="px-4 py-3 text-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <a
+                          href={`https://wa.me/${whatsappNumber(order.phone)}?text=${encodeURIComponent(
+                            `Bonjour ${order.customerName}, c’est SAIS Store. Votre commande ${orderReference(order.id)} (${formatMAD(order.total)}) est bien reçue. Confirmez-vous la livraison ?`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="press inline-flex h-8 items-center gap-1 rounded-full bg-whatsapp px-2.5 text-[11px] font-semibold text-white hover:opacity-90"
+                        >
+                          <MessageCircle size={13} /> WhatsApp
+                        </a>
+                        <Link
+                          href={`/admin/orders/${order.id}`}
+                          className="text-xs font-medium text-ink hover:underline"
+                        >
+                          Détail →
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )

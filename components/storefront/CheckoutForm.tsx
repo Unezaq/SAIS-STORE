@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { MessageCircle, ShieldCheck, Truck } from 'lucide-react'
 import { placeOrderAction, validateCouponAction } from '@/actions/checkout'
+import type { CustomerAddress } from '@/actions/customer-account'
 import { useCart, type CartItem } from '@/components/storefront/CartProvider'
 import { Button } from '@/components/ui/Button'
 import { formatMoroccanPhone, normalizeMoroccanPhone, whatsappNumber } from '@/lib/phone'
@@ -36,6 +37,10 @@ function newIdempotencyKey(): string {
     return crypto.randomUUID()
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function addressFullName(address: CustomerAddress): string {
+  return `${address.firstName} ${address.lastName}`.trim()
 }
 
 /**
@@ -88,7 +93,21 @@ function buildWhatsAppUrl({
   return `https://wa.me/${whatsappNumber(settings.whatsappPhone)}?text=${encodeURIComponent(lines.join('\n'))}`
 }
 
-export function CheckoutForm({ settings }: { settings: StoreSettings }) {
+export function CheckoutForm({
+  settings,
+  prefillName,
+  prefillPhone,
+  prefillEmail,
+  addresses = [],
+  signedIn = false,
+}: {
+  settings: StoreSettings
+  prefillName?: string
+  prefillPhone?: string
+  prefillEmail?: string
+  addresses?: CustomerAddress[]
+  signedIn?: boolean
+}) {
   const { items, subtotal, ready, clearCart } = useCart()
   const router = useRouter()
   const itemCount = items.reduce((total, item) => total + item.quantity, 0)
@@ -96,6 +115,15 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
     settings.freeDeliveryMinItems > 0 && itemCount >= settings.freeDeliveryMinItems
       ? 0
       : settings.deliveryFee
+
+  // The default saved address (or the most recent one) pre-fills the form so
+  // a returning customer never has to type their address again.
+  const initialAddress = addresses.find((address) => address.isDefault) ?? addresses[0] ?? null
+  const [selectedAddressId, setSelectedAddressId] = React.useState<string | null>(
+    initialAddress?.id ?? null
+  )
+  const selectedAddress = addresses.find((address) => address.id === selectedAddressId) ?? null
+  const deliveryFormRef = React.useRef<HTMLFormElement>(null)
 
   const [step, setStep] = React.useState<'delivery' | 'review'>('delivery')
   const [details, setDetails] = React.useState<DeliveryDetails | null>(null)
@@ -108,6 +136,45 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
   const [idempotencyKey, setIdempotencyKey] = React.useState('')
 
   const total = Math.max(0, subtotal - discountTotal + deliveryFee)
+
+  // Field defaults: once the customer has reviewed their details, coming back
+  // with « Modifier » must show exactly what they typed — not the original
+  // prefill. Before that, use the selected saved address, then the profile.
+  const defaults = {
+    customerName:
+      details?.customerName ??
+      (selectedAddress ? addressFullName(selectedAddress) : prefillName) ??
+      '',
+    phone: details?.phone ?? selectedAddress?.phone ?? prefillPhone ?? '',
+    city: details?.city ?? selectedAddress?.city ?? '',
+    address: details?.address ?? selectedAddress?.address ?? '',
+    clientEmail: details?.clientEmail ?? prefillEmail ?? '',
+    couponCode: details?.couponCode ?? '',
+    note: details?.note ?? '',
+  }
+
+  /**
+   * Switching between saved addresses fills the fields in place (the coupon
+   * and note the customer already typed are kept). « Nouvelle adresse »
+   * clears the location fields but keeps the profile name/phone.
+   */
+  function handleAddressChange(id: string) {
+    setSelectedAddressId(id || null)
+    const address = addresses.find((candidate) => candidate.id === id) ?? null
+    const form = deliveryFormRef.current
+    if (!form) return
+
+    const setValue = (name: string, value: string) => {
+      const field = form.elements.namedItem(name)
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        field.value = value
+      }
+    }
+    setValue('customerName', address ? addressFullName(address) : prefillName ?? '')
+    setValue('phone', formatMoroccanPhone(address?.phone ?? prefillPhone ?? ''))
+    setValue('city', address?.city ?? '')
+    setValue('address', address?.address ?? '')
+  }
 
   async function handleDetails(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -209,6 +276,8 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
     formData.set('confirmInfo', 'on')
     formData.set('idempotencyKey', idempotencyKey)
     formData.set('channel', channel)
+    // Which saved address was used, so the server updates that exact row.
+    formData.set('addressId', selectedAddressId ?? '')
     formData.set(
       'items',
       JSON.stringify(items.map(({ slug, color, size, quantity }) => ({ slug, color, size, quantity })))
@@ -297,6 +366,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
       {step === 'delivery' ? (
         <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
           <form
+            ref={deliveryFormRef}
             onSubmit={handleDetails}
             className="rounded-[24px] bg-white p-5 shadow-sm ring-1 ring-hairline md:p-7"
           >
@@ -306,12 +376,36 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
             </p>
 
             <div className="mt-6 grid gap-4">
+              {signedIn && addresses.length > 0 && (
+                <label className={labelClassName}>
+                  Mes adresses enregistrées
+                  <select
+                    value={selectedAddressId ?? ''}
+                    onChange={(event) => handleAddressChange(event.currentTarget.value)}
+                    className={fieldClassName}
+                  >
+                    {addresses.map((address) => (
+                      <option key={address.id} value={address.id}>
+                        {address.label} — {address.city}
+                      </option>
+                    ))}
+                    <option value="">Nouvelle adresse…</option>
+                  </select>
+                  <span className="text-xs font-normal text-text-muted">
+                    Pré-remplie depuis votre compte. Modifiez-la si besoin : elle sera
+                    mise à jour pour vos prochaines commandes.{' '}
+                    <Link href="/compte?mode=adresses" className="underline">
+                      Gérer mes adresses
+                    </Link>
+                  </span>
+                </label>
+              )}
               <label className={labelClassName}>
                 Nom complet
                 <input
                   name="customerName"
                   autoComplete="name"
-                  defaultValue=""
+                  defaultValue={defaults.customerName}
                   required
                   minLength={3}
                   maxLength={160}
@@ -325,7 +419,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  defaultValue=""
+                  defaultValue={defaults.phone ? formatMoroccanPhone(defaults.phone) : ''}
                   placeholder="06 12 34 56 78"
                   required
                   maxLength={18}
@@ -340,7 +434,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
                 <input
                   name="city"
                   autoComplete="address-level2"
-                  defaultValue=""
+                  defaultValue={defaults.city}
                   placeholder="Kenitra"
                   required
                   maxLength={100}
@@ -352,13 +446,19 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
                 <textarea
                   name="address"
                   autoComplete="street-address"
-                  defaultValue=""
+                  defaultValue={defaults.address}
                   required
                   minLength={10}
                   maxLength={500}
                   rows={3}
                   className={fieldClassName}
                 />
+                {signedIn && addresses.length === 0 && (
+                  <span className="text-xs font-normal text-text-muted">
+                    Cette adresse sera enregistrée dans votre compte pour vos
+                    prochaines commandes.
+                  </span>
+                )}
               </label>
               <label className={labelClassName}>
                 Email <span className="font-normal text-text-muted">(facultatif)</span>
@@ -366,7 +466,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
                   name="clientEmail"
                   type="email"
                   autoComplete="email"
-                  defaultValue=""
+                  defaultValue={defaults.clientEmail}
                   maxLength={254}
                   className={fieldClassName}
                 />
@@ -376,6 +476,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
                 <input
                   name="couponCode"
                   placeholder="BIENVENUE10"
+                  defaultValue={defaults.couponCode}
                   maxLength={32}
                   className={fieldClassName}
                 />
@@ -390,6 +491,7 @@ export function CheckoutForm({ settings }: { settings: StoreSettings }) {
                   name="note"
                   maxLength={1000}
                   rows={2}
+                  defaultValue={defaults.note}
                   placeholder="Ex. appeler avant, immeuble au fond de la rue…"
                   className={fieldClassName}
                 />

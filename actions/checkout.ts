@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { rememberDeliveryAddress } from '@/actions/customer-account'
 import { normalizeMoroccanPhone } from '@/lib/phone'
 import { normalizeOrderReference, orderReference } from '@/lib/orderStatus'
 import {
@@ -26,7 +27,9 @@ import type { StoreOrder } from '@/lib/types/store'
  * and coupon code. Never trusts any price/discount/total from the browser.
  *
  * Guest-first: no auth.uid(), no Supabase user session required. Customer
- * details are stored directly on the orders table.
+ * details are stored directly on the orders table. When the buyer happens to
+ * be signed in, the delivery address is also remembered in their account
+ * (best-effort) so their next checkout is pre-filled.
  */
 
 const emailSchema = z.email()
@@ -275,6 +278,16 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
 
     revalidatePath('/admin/orders')
     revalidatePath('/admin/clients')
+
+    // Signed-in customer: keep the delivery address used for this order in
+    // their account so the next checkout is pre-filled. Never fails the order.
+    await rememberDeliveryAddress({
+      addressId: formString(formData, 'addressId') || undefined,
+      customerName: parsed.data.customerName,
+      phone: parsed.data.phone,
+      city: parsed.data.city,
+      address: parsed.data.address,
+    })
 
     return {
       ok: true,

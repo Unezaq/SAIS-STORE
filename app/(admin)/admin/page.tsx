@@ -46,7 +46,7 @@ export default async function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid gap-fib-3 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-fib-3 grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (

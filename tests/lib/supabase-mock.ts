@@ -21,6 +21,7 @@ interface MockQueryBuilder {
 export class SupabaseMock {
   private tables: Map<string, Row[]> = new Map()
   private queries: MockQueryBuilder[] = []
+  private currentUser: Row | null = null
 
   constructor(initialData?: Record<string, Row[]>) {
     if (initialData) {
@@ -28,6 +29,18 @@ export class SupabaseMock {
         this.tables.set(table, [...rows])
       }
     }
+  }
+
+  /** Simulate the signed-in user (null = guest) returned by auth.getUser(). */
+  setUser(user: Row | null) {
+    this.currentUser = user
+  }
+
+  auth = {
+    getUser: async () => ({
+      data: { user: this.currentUser },
+      error: null,
+    }),
   }
 
   /** Get a reference to a table (like supabase.from('table')) */
@@ -386,6 +399,7 @@ export class SupabaseMock {
   /** Reset all mock data */
   reset() {
     this.tables.clear()
+    this.currentUser = null
   }
 
   /** Get raw table data for assertions */
