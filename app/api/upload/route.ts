@@ -1,13 +1,36 @@
 import { NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getAuthenticatedUser } from '@/lib/security/auth'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_SIZE = 5 * 1024 * 1024 // 5 MB
+const STORAGE_BUCKET = 'product-images'
+
+async function assertAdmin(): Promise<void> {
+  const user = await getAuthenticatedUser()
+  if (!user) {
+    throw new Error('Non authentifié')
+  }
+  const isAdmin =
+    user.app_metadata?.role === 'admin' ||
+    (await (async () => {
+      const supabase = createAdminClient()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      return profile?.role === 'admin'
+    })())
+  if (!isAdmin) {
+    throw new Error('Non autorisé')
+  }
+}
 
 export async function POST(request: Request) {
   try {
+    await assertAdmin()
+
     const formData = await request.formData()
     const file = formData.get('file')
 
@@ -31,17 +54,38 @@ export async function POST(request: Request) {
 
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
     const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg'
-    const filename = `${randomUUID()}.${safeExt}`
+    const filename = `${crypto.randomUUID()}.${safeExt}`
 
-    const uploadsDir = join(process.cwd(), 'public', 'uploads')
-    await mkdir(uploadsDir, { recursive: true })
-
+    const supabase = createAdminClient()
     const buffer = Buffer.from(await file.arrayBuffer())
-    await writeFile(join(uploadsDir, filename), buffer)
 
-    const url = `/uploads/${filename}`
-    return NextResponse.json({ ok: true, url })
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filename, buffer, {
+        contentType: file.type,
+        cacheControl: '3600',
+        upsert: false,
+      })
+
+    if (error) {
+      console.error('[upload] storage error', error)
+      return NextResponse.json(
+        { ok: false, error: "Échec de l'upload. Réessayez." },
+        { status: 500 }
+      )
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(data.path)
+
+    return NextResponse.json({ ok: true, url: urlData.publicUrl, path: data.path })
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'Non authentifié' || error.message === 'Non autorisé') {
+        return NextResponse.json({ ok: false, error: error.message }, { status: 403 })
+      }
+    }
     console.error('[upload] failed', error)
     return NextResponse.json(
       { ok: false, error: "Échec de l'upload. Réessayez." },

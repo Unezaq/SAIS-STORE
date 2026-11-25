@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { z } from 'zod'
 import { rememberDeliveryAddress } from '@/actions/customer-account'
 import { normalizeMoroccanPhone } from '@/lib/phone'
@@ -8,13 +9,14 @@ import { normalizeOrderReference, orderReference } from '@/lib/orderStatus'
 import {
   createOrder,
   getOrderByToken,
-  getOrdersByPhone,
+  getOrderForTracking,
   getProduct,
   getSettings,
   validateCoupon,
 } from '@/lib/store'
 import { getStorePrice } from '@/lib/pricing'
 import { checkRateLimit } from '@/lib/security/rateLimit'
+import { getAuthenticatedUser } from '@/lib/security/auth'
 import type { StoreOrder } from '@/lib/types/store'
 
 /**
@@ -78,6 +80,32 @@ export interface TrackedOrder {
 
 const ORDER_RATE_LIMIT_OPTIONS = { max: 10, windowMs: 60 * 60 * 1000 } // 1 hour
 const TRACK_RATE_LIMIT_OPTIONS = { max: 20, windowMs: 10 * 60 * 1000 } // 10 minutes
+// The tracking token is 128-bit, so this limit is abuse protection, not the
+// security boundary: it stops a single client from hammering the RPC.
+const TOKEN_TRACK_RATE_LIMIT_OPTIONS = { max: 120, windowMs: 10 * 60 * 1000 }
+const COUPON_CHECK_RATE_LIMIT_OPTIONS = { max: 30, windowMs: 10 * 60 * 1000 }
+
+/**
+ * Best-effort client identity for IP-scoped limits. `headers()` is only
+ * available inside a request scope; when it is not (tests, background work)
+ * all callers share one bucket, which still bounds abuse.
+ */
+async function clientRateLimitKey(scope: string): Promise<string> {
+  try {
+    const requestHeaders = await headers()
+    // Prefer x-real-ip (typically set by a trusted reverse proxy/load balancer)
+    // over x-forwarded-for (which is client-controllable and easily spoofed).
+    // In production behind a trusted proxy, the proxy should strip or replace
+    // untrusted forwarded headers. This IP-based limit is supplementary to
+    // the phone-based limits, not the primary control.
+    const realIp = requestHeaders.get('x-real-ip')?.trim()
+    const forwarded = requestHeaders.get('x-forwarded-for') ?? ''
+    const ip = realIp || forwarded.split(',')[0]?.trim()
+    return `${scope}:${ip || 'unknown'}`
+  } catch {
+    return `${scope}:unknown`
+  }
+}
 
 function formString(formData: FormData, key: string): string {
   const value = formData.get(key)
@@ -138,9 +166,24 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
   }
 
   // Rate limit per phone number
-  const rateLimit = checkRateLimit(`order:${phone}`, ORDER_RATE_LIMIT_OPTIONS)
+  const rateLimit = await checkRateLimit(`order:${phone}`, ORDER_RATE_LIMIT_OPTIONS)
   if (!rateLimit.allowed) {
     const retryMin = Math.ceil((rateLimit.retryAfter ?? 0) / 60000)
+    return {
+      ok: false,
+      error: `Trop de commandes récentes. Réessayez dans ${retryMin} minute(s).`,
+    }
+  }
+
+  // Defense-in-depth: IP-based limit to slow phone-rotation bypass attempts.
+  // Phone-based limit is the primary control; IP limit is supplementary
+  // because forwarded IP headers are not fully trusted (see clientRateLimitKey).
+  const ipRateLimit = await checkRateLimit(
+    await clientRateLimitKey('order-ip'),
+    { max: 20, windowMs: 60 * 60 * 1000 }
+  )
+  if (!ipRateLimit.allowed) {
+    const retryMin = Math.ceil((ipRateLimit.retryAfter ?? 0) / 60000)
     return {
       ok: false,
       error: `Trop de commandes récentes. Réessayez dans ${retryMin} minute(s).`,
@@ -252,6 +295,12 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
     .slice(0, 1000)
 
   try {
+    // Link the order to the authenticated customer when signed in, so they
+    // can later claim/view it via their account (RLS-isolated). Guests pass
+    // null and the order remains claimable via its tracking token.
+    const currentUser = await getAuthenticatedUser()
+    const authUserId = currentUser?.id ?? null
+
     const order = await createOrder(
       {
         clientEmail: parsed.data.clientEmail || undefined,
@@ -271,7 +320,7 @@ export async function placeOrderAction(formData: FormData): Promise<PlaceOrderRe
         paymentMethod: 'cod',
         paymentStatus: 'unpaid',
       },
-      null,
+      authUserId,
       null,
       { couponCode, idempotencyKey }
     )
@@ -348,7 +397,7 @@ export async function trackOrderAction(
   }
 
   // Rate limit tracking attempts per phone number
-  const rateLimit = checkRateLimit(`track:${phone}`, TRACK_RATE_LIMIT_OPTIONS)
+  const rateLimit = await checkRateLimit(`track:${phone}`, TRACK_RATE_LIMIT_OPTIONS)
   if (!rateLimit.allowed) {
     const retryMin = Math.ceil((rateLimit.retryAfter ?? 0) / 60000)
     return {
@@ -357,14 +406,7 @@ export async function trackOrderAction(
     }
   }
 
-  const rawReference = parsed.data.reference.trim().toLowerCase()
-  const code = normalizeOrderReference(parsed.data.reference)
-  const orders = await getOrdersByPhone(phone)
-  const order = orders.find(
-    (candidate) =>
-      candidate.id.toLowerCase() === rawReference ||
-      orderReference(candidate.id).slice(-8) === code
-  )
+  const order = await getOrderForTracking(phone, parsed.data.reference)
 
   if (!order) {
     return {
@@ -376,7 +418,7 @@ export async function trackOrderAction(
   return {
     ok: true,
     order: {
-      reference: orderReference(order.id),
+      reference: order.orderNumber ?? orderReference(order.id),
       status: order.status,
       createdAt: order.createdAt,
       total: order.total,
@@ -398,7 +440,23 @@ export async function trackOrderAction(
 export async function trackOrderByToken(
   token: string
 ): Promise<{ ok: true; order: TrackedOrder } | { ok: false; error: string }> {
-  const order = await getOrderByToken(token)
+  const rateLimit = await checkRateLimit(
+    await clientRateLimitKey('track-token'),
+    TOKEN_TRACK_RATE_LIMIT_OPTIONS
+  )
+  if (!rateLimit.allowed) {
+    const retryMin = Math.ceil((rateLimit.retryAfter ?? 0) / 60000)
+    return {
+      ok: false,
+      error: `Trop de tentatives de suivi. Réessayez dans ${retryMin} minute(s).`,
+    }
+  }
+
+  if (typeof token !== 'string' || token.trim().length < 16 || token.length > 128) {
+    return { ok: false, error: 'Référence de suivi introuvable.' }
+  }
+
+  const order = await getOrderByToken(token.trim())
   if (!order) {
     return {
       ok: false,
@@ -439,6 +497,22 @@ export async function validateCouponAction(
   if (typeof subtotal !== 'number' || subtotal <= 0) {
     return { ok: false, discountAmount: 0, message: 'Sous-total invalide.' }
   }
+
+  // Coupon codes are short: rate limit guessing so the pre-check cannot be
+  // used to enumerate valid codes.
+  const rateLimit = await checkRateLimit(
+    await clientRateLimitKey('coupon-check'),
+    COUPON_CHECK_RATE_LIMIT_OPTIONS
+  )
+  if (!rateLimit.allowed) {
+    const retryMin = Math.ceil((rateLimit.retryAfter ?? 0) / 60000)
+    return {
+      ok: false,
+      discountAmount: 0,
+      message: `Trop de vérifications de code promo. Réessayez dans ${retryMin} minute(s).`,
+    }
+  }
+
   try {
     const result = await validateCoupon(trimmed, subtotal)
     return {

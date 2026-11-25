@@ -183,7 +183,7 @@ select public._p0_check('3.3 stock unchanged after failure',
 
 select public._p0_expect_error(
   '3.4 quantity above stock rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-b","quantity":99}]'::jsonb,null::text,null::text,null::text)$q$,
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-b","quantity":99}]'::jsonb,null::text,null::text,null::text)$q$,
   'STOCK_INSUFFISANT'
 );
 
@@ -216,15 +216,15 @@ select public._p0_check('4.3 used_count incremented', (select used_count = 1 fro
 
 select public._p0_expect_error(
   '4.4 max_uses=1 rejects the second order',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,'p0promo10',null::text)$q$,
-  'COUPON_EPUISE'
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,'p0promo10',null::text)$q$,
+  'COUPON_INVALIDE'
 );
 select public._p0_check('4.5 coupon not double-counted', (select used_count = 1 from public.coupons where code = 'p0promo10'), (select used_count::text from public.coupons where code = 'p0promo10'));
 
 select public._p0_expect_error(
   '4.6 min_order enforced',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,'p0gros',null::text)$q$,
-  'COUPON_MIN_ORDER'
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,'p0gros',null::text)$q$,
+  'COUPON_INVALIDE'
 );
 
 -- =====================================================================
@@ -251,15 +251,15 @@ select public._p0_check('5.2 retry created no second order',
 -- 6. input validation
 -- =====================================================================
 select public._p0_expect_error('6.1 unknown product rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-nope","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'PRODUIT_INTROUVABLE');
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-nope","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'PRODUIT_INDISPONIBLE');
 select public._p0_expect_error('6.2 empty cart rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[]'::jsonb,null::text,null::text,null::text)$q$, 'PANIER_VIDE');
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[]'::jsonb,null::text,null::text,null::text)$q$, 'PANIER_VIDE');
 select public._p0_expect_error('6.3 quantity 0 rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":0}]'::jsonb,null::text,null::text,null::text)$q$, 'ARTICLE_INVALIDE');
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":0}]'::jsonb,null::text,null::text,null::text)$q$, 'ARTICLE_INVALIDE');
 select public._p0_expect_error('6.4 fractional quantity rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1.5}]'::jsonb,null::text,null::text,null::text)$q$, 'ARTICLE_INVALIDE');
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1.5}]'::jsonb,null::text,null::text,null::text)$q$, 'ARTICLE_INVALIDE');
 select public._p0_expect_error('6.5 inactive product rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-off","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'PRODUIT_INDISPONIBLE');
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-off","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'PRODUIT_INDISPONIBLE');
 select public._p0_expect_error('6.6 missing customer name rejected',
   $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'CLIENT_REQUIS');
 
@@ -275,13 +275,13 @@ select * from public.place_order_rpc(
 select public._p0_check('7.1 variant subtotal (299+10)*2', (select subtotal = 618.00 from _p0_order4), (select subtotal::text from _p0_order4));
 select public._p0_check('7.2 variant stock 2 -> 0',
   (select stock = 0 from public.product_variants where id = 'b0000000-0000-0000-0000-000000000001'));
-select public._p0_check('7.3 variant label stored',
-  (select variant = 'M · Rouge' from public.order_items where order_id = (select order_id from _p0_order4)));
+select public._p0_check('7.3 variant label stored (color / size)',
+  (select variant = 'Rouge / M' from public.order_items where order_id = (select order_id from _p0_order4)));
 select public._p0_check('7.4 variant unit price 309.00',
   (select unit_price = 309.00 from public.order_items where order_id = (select order_id from _p0_order4)),
   (select unit_price::text from public.order_items where order_id = (select order_id from _p0_order4)));
 select public._p0_expect_error('7.5 variant out of stock rejected',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-b","size":"M","color":"Rouge","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'STOCK_INSUFFISANT');
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-b","size":"M","color":"Rouge","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$, 'STOCK_INSUFFISANT');
 
 update public.settings set storewide_discount_percent = 15,
        discount_start_date = now() - interval '1 day',
@@ -356,7 +356,7 @@ select public._p0_check('9.12 anon SELECT orders fails at runtime',
   public._p0_scalar('select count(*) from public.orders'));
 select public._p0_expect_error(
   '9.13 anon EXECUTE place_order_rpc fails at runtime',
-  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'X','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$,
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000001','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,null::text,null::text)$q$,
   'permission denied'
 );
 select public._p0_check('9.14 anon can read products at runtime',
@@ -394,10 +394,205 @@ select public._p0_check('10.2 another user sees no orders',
 reset role;
 
 -- =====================================================================
--- 11. the RPC must not write client statistics (owned by lib/store.ts)
+-- 11. CRM rollup written by checkout (one row per phone)
 -- =====================================================================
-select public._p0_check('11.1 checkout does not write client stats',
-  not exists (select 1 from public.clients where phone in ('+212600000001', '+212600000002')));
+select public._p0_check('11.1 checkout upserts the client CRM row',
+  exists (select 1 from public.clients where phone = '+212600000001' and order_count >= 1));
+select public._p0_check('11.2 guest checkout never links auth_user_id',
+  not exists (select 1 from public.orders where phone = '+212600000001' and auth_user_id is not null));
+
+-- =====================================================================
+-- 12. 20261124 migrations — least-privilege grants
+-- =====================================================================
+select public._p0_check('12.1 anon/authenticated have no inventory_ledger access',
+  has_table_privilege('anon', 'public.inventory_ledger', 'SELECT') = false
+  and has_table_privilege('authenticated', 'public.inventory_ledger', 'INSERT') = false
+  and has_table_privilege('authenticated', 'public.inventory_ledger', 'UPDATE') = false
+  and has_table_privilege('authenticated', 'public.inventory_ledger', 'DELETE') = false);
+select public._p0_check('12.2 service_role can write the ledger',
+  has_table_privilege('service_role', 'public.inventory_ledger', 'INSERT') = true);
+select public._p0_check('12.3 anon/authenticated have no coupon_redemptions access',
+  has_table_privilege('anon', 'public.coupon_redemptions', 'SELECT') = false
+  and has_table_privilege('authenticated', 'public.coupon_redemptions', 'INSERT') = false
+  and has_table_privilege('authenticated', 'public.coupon_redemptions', 'UPDATE') = false
+  and has_table_privilege('authenticated', 'public.coupon_redemptions', 'DELETE') = false);
+select public._p0_check('12.4 customers cannot write orders directly',
+  has_table_privilege('authenticated', 'public.orders', 'INSERT') = false
+  and has_table_privilege('authenticated', 'public.orders', 'UPDATE') = false
+  and has_table_privilege('authenticated', 'public.orders', 'DELETE') = false);
+select public._p0_check('12.5 cancellation/return audit tables are not customer-readable',
+  has_table_privilege('authenticated', 'public.order_cancellations', 'SELECT') = false
+  and has_table_privilege('authenticated', 'public.order_returns', 'SELECT') = false);
+select public._p0_check('12.6 check_rate_limit is service_role only',
+  has_function_privilege('anon', 'public.check_rate_limit(text,integer,integer)', 'EXECUTE') = false
+  and has_function_privilege('authenticated', 'public.check_rate_limit(text,integer,integer)', 'EXECUTE') = false
+  and has_function_privilege('service_role', 'public.check_rate_limit(text,integer,integer)', 'EXECUTE') = true);
+select public._p0_check('12.7 is_order_owner is service_role only',
+  has_function_privilege('authenticated', 'public.is_order_owner(text,uuid)', 'EXECUTE') = false
+  and has_function_privilege('service_role', 'public.is_order_owner(text,uuid)', 'EXECUTE') = true);
+select public._p0_check('12.8 get_order_for_tracking is service_role only',
+  has_function_privilege('anon', 'public.get_order_for_tracking(text,text)', 'EXECUTE') = false
+  and has_function_privilege('authenticated', 'public.get_order_for_tracking(text,text)', 'EXECUTE') = false
+  and has_function_privilege('service_role', 'public.get_order_for_tracking(text,text)', 'EXECUTE') = true);
+select public._p0_check('12.9 cleanup_rate_limits is not anon-executable',
+  has_function_privilege('anon', 'public.cleanup_rate_limits()', 'EXECUTE') = false);
+select public._p0_check('12.10 legacy validate_coupon(text,numeric) overload removed',
+  not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'validate_coupon' and p.pronargs = 2
+  ));
+select public._p0_check('12.11 exactly one validate_coupon signature remains',
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'validate_coupon') = 1);
+
+-- =====================================================================
+-- 13. runtime probes — customers cannot touch ledgers or cancel others
+-- =====================================================================
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000002', true);
+
+select public._p0_expect_error(
+  '13.1 customer cannot insert inventory_ledger',
+  $q$insert into public.inventory_ledger (product_id, quantity_change, event_type, idempotency_key) values ('a0000000-0000-0000-0000-000000000001', 1, 'adjustment', 'p0-hack')$q$,
+  'permission denied');
+
+select public._p0_expect_error(
+  '13.2 customer cannot insert coupon_redemptions',
+  $q$insert into public.coupon_redemptions (coupon_id, order_id, discount_amount) select id, 'ord-does-not-exist', 0 from public.coupons limit 1$q$,
+  'permission denied');
+
+select public._p0_check('13.3 customer cannot execute check_rate_limit',
+  public._p0_scalar($q$select allowed from public.check_rate_limit('p0-probe', 1, 60000)$q$) = 'ERR:42501');
+
+select public._p0_check('13.4 customer cannot execute get_order_for_tracking',
+  public._p0_scalar($q$select order_id from public.get_order_for_tracking('SAIS-00000000', '+212600000001')$q$) = 'ERR:42501');
+
+select public._p0_check('13.5 non-admin cannot run cleanup_rate_limits',
+  public._p0_scalar($q$select public.cleanup_rate_limits()$q$) like 'ERR:P0001');
+
+reset role;
+
+-- 13.6–13.10 run as postgres with JWT claims set: this isolates the RPC's own
+-- authorization logic (auth.uid()) from RLS row visibility.
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000002', true);
+
+select public._p0_expect_error(
+  '13.6 customer cannot cancel another customer''s order',
+  $q$select * from public.cancel_order_rpc((select id from public.orders where phone = '+212600000002' limit 1), 'c0000000-0000-0000-0000-000000000002'::uuid, 'customer', 'p0-other-cancel', null)$q$,
+  'NON_AUTORISE');
+
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000001', true);
+
+create temp table _p0_stock_before_cancel as
+select stock as s from public.products where slug = 'p0-a';
+
+create temp table _p0_cancel1 as
+select * from public.cancel_order_rpc(
+  (select id from public.orders where phone = '+212600000002' limit 1),
+  'c0000000-0000-0000-0000-000000000001'::uuid, 'customer', 'p0-own-cancel', null
+);
+
+select public._p0_check('13.7 owner can cancel their own order',
+  (select status = 'annulee' from _p0_cancel1));
+select public._p0_check('13.8 cancellation restocked the ordered quantity exactly once',
+  (select stock = (select s from _p0_stock_before_cancel) + 1 from public.products where slug = 'p0-a'),
+  (select stock::text from public.products where slug = 'p0-a'));
+select public._p0_check('13.9 exactly one cancellation ledger row written',
+  (select count(*) = 1 from public.inventory_ledger
+   where reference_type = 'order'
+     and reference_id = (select order_id from _p0_cancel1)
+     and event_type = 'cancellation'));
+select public._p0_expect_error(
+  '13.10 a cancelled order cannot be cancelled twice',
+  $q$select * from public.cancel_order_rpc((select id from public.orders where phone = '+212600000002' limit 1), 'c0000000-0000-0000-0000-000000000001'::uuid, 'customer', null, null)$q$,
+  'DEJA_ANNULEE');
+
+-- =====================================================================
+-- 14. returns — admin only, full return restocks from order_items
+-- =====================================================================
+create temp table _p0_return_order as
+select * from public.place_order_rpc(
+  null::uuid, null::uuid, null::text, null::text,
+  'Client Retour', '+212600000003', '2 rue retour', 'Fes',
+  '[{"slug":"p0-a","quantity":1}]'::jsonb, null::text, null::text, 'p0-return-order'
+);
+update public.orders set status = 'livree'
+ where id = (select order_id from _p0_return_order);
+
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claim.sub', 'c0000000-0000-0000-0000-000000000002', true);
+
+select public._p0_expect_error(
+  '14.1 non-admin cannot register a return',
+  $q$select * from public.return_order_rpc((select order_id from _p0_return_order), 'c0000000-0000-0000-0000-000000000002'::uuid, '[]'::jsonb, 'p0-ret-1', null)$q$,
+  'NON_AUTORISE');
+
+-- Clear the JWT: this is the trusted service-role path used by the server.
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
+
+create temp table _p0_stock_before_return as
+select stock as s from public.products where slug = 'p0-a';
+
+create temp table _p0_return1 as
+select * from public.return_order_rpc(
+  (select order_id from _p0_return_order),
+  'c0000000-0000-0000-0000-000000000001'::uuid, '[]'::jsonb, 'p0-ret-1', null
+);
+
+select public._p0_check('14.2 full return restocks the ordered quantity',
+  (select stock = (select s from _p0_stock_before_return) + 1 from public.products where slug = 'p0-a'),
+  (select stock::text from public.products where slug = 'p0-a'));
+select public._p0_check('14.3 return ledger row written',
+  (select count(*) = 1 from public.inventory_ledger
+   where reference_type = 'order'
+     and reference_id = (select order_id from _p0_return1)
+     and event_type = 'return'));
+select public._p0_check('14.4 returned status recorded',
+  (select status = 'returned' from _p0_return1));
+select public._p0_expect_error(
+  '14.5 only a delivered order can be returned',
+  $q$select * from public.return_order_rpc((select order_id from _p0_return1), 'c0000000-0000-0000-0000-000000000001'::uuid, '[]'::jsonb, 'p0-ret-2', null)$q$,
+  'NON_LIVREE');
+
+-- =====================================================================
+-- 15. per-line pricing and duplicate cart lines
+-- =====================================================================
+create temp table _p0_mixed as
+select * from public.place_order_rpc(
+  null::uuid, null::uuid, null::text, null::text,
+  'Client Mixte', '+212600000004', '3 rue mixte', 'Tanger',
+  '[{"slug":"p0-a","quantity":1},{"slug":"p0-b","quantity":1}]'::jsonb, null::text, null::text, null::text
+);
+select public._p0_check('15.1 each line keeps its own unit price',
+  (select count(*) filter (where unit_price = 100.00) = 1
+      and count(*) filter (where unit_price = 299.00) = 1
+   from public.order_items where order_id = (select order_id from _p0_mixed)),
+  (select string_agg(unit_price::text, ',' order by unit_price) from public.order_items where order_id = (select order_id from _p0_mixed)));
+select public._p0_check('15.2 subtotal is the sum of the line totals',
+  (select subtotal = 399.00 from _p0_mixed),
+  (select subtotal::text from _p0_mixed));
+
+select public._p0_expect_error(
+  '15.3 an idempotency key cannot be replayed from another phone',
+  $q$select * from public.place_order_rpc(null::uuid,null::uuid,null::text,null::text,'XX','+212600000099','A','Casablanca','[{"slug":"p0-a","quantity":1}]'::jsonb,null::text,null::text,'p0-return-order')$q$,
+  'DOUBLON');
+
+create temp table _p0_dup as
+select * from public.place_order_rpc(
+  null::uuid, null::uuid, null::text, null::text,
+  'Client Doublon', '+212600000005', '4 rue doublon', 'Agadir',
+  '[{"slug":"p0-b","quantity":1},{"slug":"p0-b","quantity":1}]'::jsonb, null::text, null::text, null::text
+);
+select public._p0_check('15.4 duplicate cart lines are aggregated into one order_item',
+  (select count(*) = 1 and sum(quantity) = 2 from public.order_items
+   where order_id = (select order_id from _p0_dup)));
+select public._p0_check('15.5 aggregated line charged once (299 x 2)',
+  (select subtotal = 598.00 from _p0_dup),
+  (select subtotal::text from _p0_dup));
 
 -- =====================================================================
 -- result

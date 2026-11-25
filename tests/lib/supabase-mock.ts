@@ -22,6 +22,7 @@ export class SupabaseMock {
   private tables: Map<string, Row[]> = new Map()
   private queries: MockQueryBuilder[] = []
   private currentUser: Row | null = null
+  private _rateLimitStore: Map<string, { count: number; resetAt: number }> = new Map()
 
   constructor(initialData?: Record<string, Row[]>) {
     if (initialData) {
@@ -343,6 +344,86 @@ export class SupabaseMock {
           return
         }
 
+        if (funcName === 'check_rate_limit') {
+          const identifier = String(params?.p_identifier || '')
+          const max = Number(params?.p_max || 10)
+          const windowMs = Number(params?.p_window_ms || 60000)
+          const now = Date.now()
+
+          // Simple in-memory fixed window for the mock
+          let entry = this._rateLimitStore.get(identifier)
+          if (!entry || now > entry.resetAt) {
+            this._rateLimitStore.set(identifier, { count: 1, resetAt: now + windowMs })
+            resolve({ data: [{ allowed: true, retry_after_ms: null }], error: null })
+            return
+          }
+          if (entry.count >= max) {
+            resolve({
+              data: [{ allowed: false, retry_after_ms: entry.resetAt - now }],
+              error: null,
+            })
+            return
+          }
+          entry.count += 1
+          resolve({ data: [{ allowed: true, retry_after_ms: null }], error: null })
+          return
+        }
+
+        if (funcName === 'get_order_for_tracking') {
+          const orderNumber = String(params?.p_order_number || '')
+          const phone = String(params?.p_phone || '')
+          const orders = this.getTable('orders')
+          const order = orders.find(
+            (o: any) =>
+              o.phone === phone &&
+              (o.id === orderNumber ||
+                o.order_number === orderNumber.toUpperCase() ||
+                o.tracking_token === orderNumber)
+          )
+          resolve({
+            data: order
+              ? [
+                  {
+                    ...order,
+                    items: order.items,
+                  },
+                ]
+              : [],
+            error: null,
+          })
+          return
+        }
+
+        if (funcName === 'cancel_order_rpc') {
+          resolve({
+            data: [
+              {
+                order_id: params?.p_order_id ?? 'ord-test',
+                status: 'annulee',
+                restocked: true,
+                message: 'Commande annulée.',
+              },
+            ],
+            error: null,
+          })
+          return
+        }
+
+        if (funcName === 'return_order_rpc') {
+          resolve({
+            data: [
+              {
+                order_id: params?.p_order_id ?? 'ord-test',
+                status: 'returned',
+                restocked: true,
+                message: 'Retour enregistré.',
+              },
+            ],
+            error: null,
+          })
+          return
+        }
+
         if (funcName === 'place_order_rpc') {
           let p_items = params.p_items
           if (typeof p_items === 'string') {
@@ -400,6 +481,7 @@ export class SupabaseMock {
   reset() {
     this.tables.clear()
     this.currentUser = null
+    this._rateLimitStore.clear()
   }
 
   /** Get raw table data for assertions */

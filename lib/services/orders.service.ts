@@ -1,4 +1,5 @@
 import 'server-only'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { orderReference } from '@/lib/orderStatus'
 import type { OrderStatus } from '@/lib/orderStatus'
@@ -232,10 +233,87 @@ export async function getOrdersByPhone(phone: string): Promise<StoreOrder[]> {
   )
 }
 
+/**
+ * Orders for an authenticated user (RLS-isolated: only their own rows are
+ * visible). Used by the customer account order history.
+ */
+export async function getOrdersByUserId(userId: string): Promise<StoreOrder[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, order_items(*, products(slug))')
+    .eq('auth_user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((row: any) =>
+    mapOrder(row as OrderRow, mapJoinedItems(row.order_items, (row as OrderRow).items ?? []))
+  )
+}
+
+/**
+ * Public order tracking by phone + exact reference (order_number or
+ * tracking_token). Used by guest tracking — no session required. Only the
+ * single matching order is returned; no order list is ever exposed.
+ */
+export async function getOrderForTracking(
+  phone: string,
+  reference: string
+): Promise<StoreOrder | null> {
+  const supabase = createAdminClient()
+  const { data, error } = await supabase.rpc('get_order_for_tracking', {
+    p_order_number: reference,
+    p_phone: phone,
+  })
+
+  if (error) throw error
+  const row = (data ?? [])[0]
+  if (!row) return null
+
+  return mapOrder(row as unknown as OrderRow, mapJoinedItems(row.items, []))
+}
+
 export async function updateOrderStatus(
   id: string,
-  status: OrderStatus
+  status: OrderStatus,
+  actorId: string | null = null,
+  actorType: 'admin' | 'customer' = 'admin'
 ): Promise<void> {
+  // Cancellation and return go through dedicated SECURITY DEFINER RPCs that
+  // handle stock, coupons, ledger, and idempotency. They run with the real
+  // user session so auth.uid()/is_admin() can authorize the action.
+  if (status === 'annulee' || status === 'returned') {
+    const supabase = await createClient()
+    const { data } = await supabase.auth.getUser()
+    const sessionUserId = data.user?.id
+
+    if (!sessionUserId) {
+      throw new Error('Session administrateur requise pour cette opération.')
+    }
+
+    if (status === 'annulee') {
+      const { error } = await supabase.rpc('cancel_order_rpc', {
+        p_order_id: id,
+        p_actor_id: sessionUserId,
+        p_actor_type: actorType,
+        p_idempotency_key: `cancel:${id}`,
+        p_note: 'Statut mis à jour vers annulée.',
+      })
+      if (error) throw error
+      return
+    }
+
+    const { error } = await supabase.rpc('return_order_rpc', {
+      p_order_id: id,
+      p_actor_id: sessionUserId,
+      p_return_items: [],
+      p_idempotency_key: `return:${id}`,
+      p_note: 'Statut mis à jour vers retournée.',
+    })
+    if (error) throw error
+    return
+  }
+
   const supabase = createAdminClient()
   const { error: updateError } = await supabase
     .from('orders')
@@ -253,6 +331,78 @@ export async function updateOrderStatus(
   } catch {
     // Non-blocking status history audit insert
   }
+}
+
+/**
+ * Cancel an order (customer or admin). Restores stock exactly once,
+ * reverses coupon usage, writes ledger entries. Idempotent.
+ *
+ * The RPC derives the actor from the authenticated session; a caller-supplied
+ * actor id can never override auth.uid().
+ */
+export async function cancelOrder(
+  orderId: string,
+  actorId: string | null,
+  actorType: 'admin' | 'customer' = 'customer',
+  idempotencyKey?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data } = await supabase.auth.getUser()
+  const sessionUserId = data.user?.id
+
+  if (!sessionUserId) {
+    return { ok: false, error: 'Vous devez être connecté(e) pour annuler cette commande.' }
+  }
+
+  const { error } = await supabase.rpc('cancel_order_rpc', {
+    p_order_id: orderId,
+    p_actor_id: sessionUserId,
+    p_actor_type: actorType,
+    p_idempotency_key: idempotencyKey ?? `cancel:${orderId}`,
+    p_note: 'Annulation demandée.',
+  })
+
+  if (error) {
+    return { ok: false, error: error.message ?? 'Annulation échouée.' }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Return an order after delivery (admin only). Restocks returned quantities.
+ * Idempotent.
+ *
+ * An empty `returnItems` means "return every line": the RPC derives the
+ * quantities and variants from the immutable order_items rows.
+ */
+export async function returnOrder(
+  orderId: string,
+  actorId: string | null,
+  returnItems: Array<{ product_id?: string; variant_id?: string; quantity: number }>,
+  idempotencyKey?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient()
+  const { data } = await supabase.auth.getUser()
+  const sessionUserId = data.user?.id
+
+  if (!sessionUserId) {
+    return { ok: false, error: 'Session administrateur requise pour enregistrer un retour.' }
+  }
+
+  const { error } = await supabase.rpc('return_order_rpc', {
+    p_order_id: orderId,
+    p_actor_id: sessionUserId,
+    p_return_items: returnItems,
+    p_idempotency_key: idempotencyKey ?? `return:${orderId}`,
+    p_note: 'Retour enregistré.',
+  })
+
+  if (error) {
+    return { ok: false, error: error.message ?? 'Retour échoué.' }
+  }
+
+  return { ok: true }
 }
 
 export async function getOrderDetail(id: string): Promise<StoreOrder | null> {

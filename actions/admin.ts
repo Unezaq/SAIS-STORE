@@ -12,6 +12,8 @@ import {
   updateOrderStatus,
   upsertProduct,
   updateSettings,
+  cancelOrder,
+  returnOrder,
 } from '@/lib/store'
 import {
   AUTH_PROVIDERS_DISABLED_MESSAGE,
@@ -49,7 +51,7 @@ const productSchema = z.object({
   ref: z.string().trim().max(80).optional(),
   description: z.string().trim().max(4000).optional(),
 })
-const orderStatusSchema = z.enum(['en_attente', 'confirmee', 'expediee', 'livree', 'annulee'])
+const orderStatusSchema = z.enum(['en_attente', 'confirmee', 'expediee', 'livree', 'annulee', 'returned', 'refunded'])
 type ActionResult = { ok: true } | { ok: false; error: string }
 const dateInputSchema = z.string().refine((value) => {
   if (!value) return true
@@ -224,7 +226,62 @@ export async function updateOrderStatusAction(formData: FormData): Promise<Actio
   })
   if (!parsed.success) return invalidInput()
 
-  await updateOrderStatus(parsed.data.id, parsed.data.status)
+  // Identify the admin actor for audit + RPC authorization.
+  const supabase = await createClient()
+  const { data: user } = await supabase.auth.getUser()
+  const actorId = user?.user?.id ?? null
+
+  await updateOrderStatus(parsed.data.id, parsed.data.status, actorId, 'admin')
+  revalidatePath('/admin/orders')
+  revalidatePath(`/admin/orders/${parsed.data.id}`)
+  return { ok: true }
+}
+
+export async function cancelOrderAction(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = z.object({
+    id: z.string().trim().min(1).max(128),
+    idempotencyKey: z.string().trim().min(1).max(128).optional(),
+    note: z.string().trim().max(1000).optional(),
+  }).safeParse({
+    id: formString(formData, 'id'),
+    idempotencyKey: formString(formData, 'idempotencyKey') || undefined,
+    note: formString(formData, 'note'),
+  })
+  if (!parsed.success) return invalidInput()
+
+  const supabase = await createClient()
+  const { data: user } = await supabase.auth.getUser()
+  const actorId = user?.user?.id ?? null
+
+  const result = await cancelOrder(parsed.data.id, actorId, 'admin', parsed.data.idempotencyKey)
+  if (!result.ok) return { ok: false, error: result.error ?? 'Annulation échouée.' }
+
+  revalidatePath('/admin/orders')
+  revalidatePath(`/admin/orders/${parsed.data.id}`)
+  return { ok: true }
+}
+
+export async function returnOrderAction(formData: FormData): Promise<ActionResult> {
+  await requireAdmin()
+  const parsed = z.object({
+    id: z.string().trim().min(1).max(128),
+    idempotencyKey: z.string().trim().min(1).max(128).optional(),
+    note: z.string().trim().max(1000).optional(),
+  }).safeParse({
+    id: formString(formData, 'id'),
+    idempotencyKey: formString(formData, 'idempotencyKey') || undefined,
+    note: formString(formData, 'note'),
+  })
+  if (!parsed.success) return invalidInput()
+
+  const supabase = await createClient()
+  const { data: user } = await supabase.auth.getUser()
+  const actorId = user?.user?.id ?? null
+
+  const result = await returnOrder(parsed.data.id, actorId, [], parsed.data.idempotencyKey)
+  if (!result.ok) return { ok: false, error: result.error ?? 'Retour échoué.' }
+
   revalidatePath('/admin/orders')
   revalidatePath(`/admin/orders/${parsed.data.id}`)
   return { ok: true }

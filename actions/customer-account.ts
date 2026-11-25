@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AUTH_PROVIDERS_DISABLED_MESSAGE, isAuthProviderDisabled } from '@/lib/security/auth'
 import { normalizeMoroccanPhone } from '@/lib/phone'
-import { getOrdersByPhone } from '@/lib/store'
+import { getOrdersByUserId } from '@/lib/store'
 import type { StoreOrder } from '@/lib/types/store'
 
 export type AccountActionResult = { ok: true } | { ok: false; error: string }
@@ -35,9 +35,9 @@ function formString(formData: FormData, key: string): string {
  * Optional customer account.
  *
  * Guest checkout stays the default, so this never blocks a sale. The account is
- * created confirmed (the project has no SMS provider and `mailer_autoconfirm`
- * is off), then a normal password session is opened so the visitor is signed in
- * immediately — no email round trip, no ghost account.
+ * created unconfirmed (email confirmation is not auto-granted), then a normal
+ * password session is attempted so the visitor can sign in if the project's
+ * email provider allows unconfirmed sign-ins. No admin role is ever assigned.
  */
 export async function registerAccountAction(formData: FormData): Promise<AccountActionResult> {
   const parsed = registerSchema.safeParse({
@@ -59,10 +59,14 @@ export async function registerAccountAction(formData: FormData): Promise<Account
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: parsed.data.email,
     password: parsed.data.password,
-    email_confirm: true,
+    // Never auto-confirm: email confirmation must come from the actual auth
+    // flow. email_confirm: false leaves the account unconfirmed until the
+    // project's email provider verifies it. No admin role is ever assigned.
+    email_confirm: false,
     user_metadata: {
       full_name: parsed.data.fullName,
       phone,
+      role: 'customer',
     },
   })
 
@@ -590,14 +594,15 @@ export async function rememberDeliveryAddress(input: DeliveryAddressInput): Prom
 }
 
 /* ------------------------------------------------------------------------
- * Customer orders (orders linked to the signed-in client's phone)
+ * Customer orders (orders linked to the signed-in client)
  * ------------------------------------------------------------------------ */
 
 export async function getCustomerOrders(): Promise<StoreOrder[]> {
-  const profile = await getCustomerProfile()
-  if (!profile?.phone) return []
+  const supabase = await createClient()
+  const { data: user } = await supabase.auth.getUser()
+  if (!user?.user) return []
 
-  return getOrdersByPhone(profile.phone)
+  return getOrdersByUserId(user.user.id)
 }
 
 /* ------------------------------------------------------------------------

@@ -27,8 +27,12 @@ export {
   getOrderById,
   getOrderByToken,
   getOrderDetail,
+  getOrderForTracking,
   getOrdersByPhone,
+  getOrdersByUserId,
   updateOrderStatus,
+  cancelOrder,
+  returnOrder,
 } from '@/lib/services/orders.service'
 
 // Clients / CRM

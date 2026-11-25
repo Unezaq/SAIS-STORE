@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, Clock, ShieldCheck, Truck } from 'lucide-react'
+import { AlertCircle, CheckCircle, Clock, RefreshCw, ShieldCheck, Truck } from 'lucide-react'
 import type { OrderStatus } from '@/lib/orderStatus'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_STYLES } from '@/lib/orderStatus'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,8 @@ const ICONS: Record<OrderStatus, typeof Clock> = {
   expediee: Truck,
   livree: CheckCircle,
   annulee: AlertCircle,
+  returned: RefreshCw,
+  refunded: RefreshCw,
 }
 
 export function OrderStatusBadge({
